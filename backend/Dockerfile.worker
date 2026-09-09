@@ -1,0 +1,26 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Usuário não-root. cap_add: NET_RAW no docker-compose só coloca a
+# capability no bounding set do container — um processo não-root ainda
+# precisa da capability marcada no próprio binário (file capability) pra
+# poder usá-la de fato. setcap é o mecanismo padrão pra isso (substituto
+# moderno de setuid, escopo limitado ao binário, não ao processo inteiro).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libcap2-bin \
+    && rm -rf /var/lib/apt/lists/* \
+    && setcap cap_net_raw+ep "$(readlink -f "$(which python3)")"
+
+RUN useradd --create-home --shell /usr/sbin/nologin worker
+USER worker
+
+CMD ["python", "-m", "monitor.main"]

@@ -1,0 +1,19 @@
+# Ambiente
+.env
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Editores / SO
+.DS_Store
+.idea/
+.vscode/

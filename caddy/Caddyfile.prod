@@ -1,0 +1,35 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /health {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+# Subdomínio dedicado só para a API S3 do MinIO, com seu próprio
+# certificado. É o host que aparece nas URLs assinadas devolvidas pela API
+# (MINIO_PUBLIC_ENDPOINT) — o navegador baixa a foto direto daqui, sem
+# passar pelo backend. Precisa de um segundo registro DNS (A/AAAA) apontando
+# pro mesmo servidor.
+{$MINIO_DOMAIN} {
+	reverse_proxy minio:9000
+}
