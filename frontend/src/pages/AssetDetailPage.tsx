@@ -1,5 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AssetForm, type AssetFormValues } from "@/components/AssetForm";
@@ -38,6 +45,8 @@ export function AssetDetailPage() {
   const [editingAsset, setEditingAsset] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const photosRef = useRef<PhotosSectionHandle>(null);
+  const monitoringRef = useRef<MonitoringSectionHandle>(null);
 
   const assetQuery = useQuery({
     queryKey: ["asset", assetId],
@@ -127,13 +136,27 @@ export function AssetDetailPage() {
           <Button variant="outline" size="sm" onClick={() => setEditingAsset((v) => !v)}>
             {editingAsset ? "Cancelar edição" : "Editar ativo"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => scrollToSection("photos-section")}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              scrollToSection("photos-section");
+              photosRef.current?.openUpload();
+            }}
+          >
             Adicionar foto
           </Button>
           <Button variant="outline" size="sm" onClick={() => scrollToSection("backup-section")}>
             Backup
           </Button>
-          <Button variant="outline" size="sm" onClick={() => scrollToSection("monitoring-section")}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              scrollToSection("monitoring-section");
+              monitoringRef.current?.startEditing();
+            }}
+          >
             Editar monitoramento
           </Button>
           <Button variant="outline" size="sm" onClick={handleToggleEnabled}>
@@ -200,9 +223,9 @@ export function AssetDetailPage() {
       </div>
 
       {assetId && <HistorySection assetId={assetId} />}
-      {assetId && <PhotosSection assetId={assetId} canManage={canManage} />}
+      {assetId && <PhotosSection ref={photosRef} assetId={assetId} canManage={canManage} />}
       {assetId && <BackupSection assetId={assetId} canManage={canManage} backupNotes={asset.backup_notes} />}
-      {assetId && <MonitoringSection assetId={assetId} canManage={canManage} />}
+      {assetId && <MonitoringSection ref={monitoringRef} assetId={assetId} canManage={canManage} />}
     </div>
   );
 }
@@ -273,9 +296,17 @@ function HistorySection({ assetId }: { assetId: string }) {
   );
 }
 
-function PhotosSection({ assetId, canManage }: { assetId: string; canManage: boolean }) {
+interface PhotosSectionHandle {
+  openUpload: () => void;
+}
+
+const PhotosSection = forwardRef<PhotosSectionHandle, { assetId: string; canManage: boolean }>(
+  function PhotosSection({ assetId, canManage }, ref) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => ({
+    openUpload: () => fileInputRef.current?.click(),
+  }));
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<AssetPhotoOut | null>(null);
@@ -417,7 +448,8 @@ function PhotosSection({ assetId, canManage }: { assetId: string; canManage: boo
       )}
     </div>
   );
-}
+  },
+);
 
 function BackupSection({
   assetId,
@@ -610,7 +642,12 @@ function BackupSection({
   );
 }
 
-function MonitoringSection({ assetId, canManage }: { assetId: string; canManage: boolean }) {
+interface MonitoringSectionHandle {
+  startEditing: () => void;
+}
+
+const MonitoringSection = forwardRef<MonitoringSectionHandle, { assetId: string; canManage: boolean }>(
+  function MonitoringSection({ assetId, canManage }, ref) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [intervalSeconds, setIntervalSeconds] = useState(30);
@@ -636,6 +673,10 @@ function MonitoringSection({ assetId, canManage }: { assetId: string; canManage:
     setError(null);
     setEditing(true);
   }
+
+  useImperativeHandle(ref, () => ({
+    startEditing: startEdit,
+  }));
 
   async function handleSave(event: FormEvent) {
     event.preventDefault();
@@ -771,4 +812,5 @@ function MonitoringSection({ assetId, canManage }: { assetId: string; canManage:
       )}
     </div>
   );
-}
+  },
+);
