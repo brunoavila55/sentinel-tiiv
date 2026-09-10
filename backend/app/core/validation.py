@@ -1,9 +1,13 @@
 import ipaddress
 import re
 
-# RFC 1123: labels alfanuméricos/hífen, sem hífen nas pontas, até 63 chars
-# por label, 253 no total.
-_HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$")
+# Baseado em RFC 1123 (labels até 63 chars por label, 253 no total, sem
+# hífen/underscore nas pontas do label), mas também aceita "_" pois é comum
+# em nomes de equipamentos de rede (switches, roteadores) mesmo não sendo
+# estritamente válido em DNS público.
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)(?![-_])[A-Za-z0-9_-]{1,63}(?<![-_])(\.(?![-_])[A-Za-z0-9_-]{1,63}(?<![-_]))*$"
+)
 
 
 def clean_optional_str(value: str | None) -> str | None:
