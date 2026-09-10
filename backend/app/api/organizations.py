@@ -1,7 +1,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import ROLES_MANAGE_ORGANIZATION, ROLES_MANAGE_USERS, can_manage_target_role, require_role
@@ -28,11 +28,18 @@ settings = get_settings()
 logger = logging.getLogger("sentinel.organizations")
 
 
+def _organization_out(organization: Organization) -> OrganizationOut:
+    logo_light_url, logo_dark_url, favicon_url = organization_service.build_branding_urls(organization)
+    return OrganizationOut.model_validate(organization).model_copy(
+        update={"logo_light_url": logo_light_url, "logo_dark_url": logo_dark_url, "favicon_url": favicon_url}
+    )
+
+
 @router.get("/current", response_model=OrganizationOut)
 async def get_current_organization_route(
     organization: Organization = Depends(get_current_organization),
 ) -> OrganizationOut:
-    return OrganizationOut.model_validate(organization)
+    return _organization_out(organization)
 
 
 @router.patch("/current", response_model=OrganizationOut)
@@ -43,7 +50,82 @@ async def update_current_organization(
     db: AsyncSession = Depends(get_db),
 ) -> OrganizationOut:
     updated = await organization_service.update_name(db, organization, payload.name)
-    return OrganizationOut.model_validate(updated)
+    return _organization_out(updated)
+
+
+@router.post("/current/logo-light", response_model=OrganizationOut)
+async def upload_organization_logo_light(
+    file: UploadFile = File(...),
+    organization: Organization = Depends(get_current_organization),
+    actor: OrganizationUser = Depends(require_role(*ROLES_MANAGE_ORGANIZATION)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationOut:
+    content = await file.read()
+    updated = await organization_service.upload_logo_light(
+        db, organization, content=content, content_type=file.content_type or "application/octet-stream",
+        actor_user_id=actor.user_id,
+    )
+    return _organization_out(updated)
+
+
+@router.delete("/current/logo-light", response_model=OrganizationOut)
+async def delete_organization_logo_light(
+    organization: Organization = Depends(get_current_organization),
+    actor: OrganizationUser = Depends(require_role(*ROLES_MANAGE_ORGANIZATION)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationOut:
+    updated = await organization_service.remove_logo_light(db, organization, actor_user_id=actor.user_id)
+    return _organization_out(updated)
+
+
+@router.post("/current/logo-dark", response_model=OrganizationOut)
+async def upload_organization_logo_dark(
+    file: UploadFile = File(...),
+    organization: Organization = Depends(get_current_organization),
+    actor: OrganizationUser = Depends(require_role(*ROLES_MANAGE_ORGANIZATION)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationOut:
+    content = await file.read()
+    updated = await organization_service.upload_logo_dark(
+        db, organization, content=content, content_type=file.content_type or "application/octet-stream",
+        actor_user_id=actor.user_id,
+    )
+    return _organization_out(updated)
+
+
+@router.delete("/current/logo-dark", response_model=OrganizationOut)
+async def delete_organization_logo_dark(
+    organization: Organization = Depends(get_current_organization),
+    actor: OrganizationUser = Depends(require_role(*ROLES_MANAGE_ORGANIZATION)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationOut:
+    updated = await organization_service.remove_logo_dark(db, organization, actor_user_id=actor.user_id)
+    return _organization_out(updated)
+
+
+@router.post("/current/favicon", response_model=OrganizationOut)
+async def upload_organization_favicon(
+    file: UploadFile = File(...),
+    organization: Organization = Depends(get_current_organization),
+    actor: OrganizationUser = Depends(require_role(*ROLES_MANAGE_ORGANIZATION)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationOut:
+    content = await file.read()
+    updated = await organization_service.upload_favicon(
+        db, organization, content=content, content_type=file.content_type or "application/octet-stream",
+        actor_user_id=actor.user_id,
+    )
+    return _organization_out(updated)
+
+
+@router.delete("/current/favicon", response_model=OrganizationOut)
+async def delete_organization_favicon(
+    organization: Organization = Depends(get_current_organization),
+    actor: OrganizationUser = Depends(require_role(*ROLES_MANAGE_ORGANIZATION)),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationOut:
+    updated = await organization_service.remove_favicon(db, organization, actor_user_id=actor.user_id)
+    return _organization_out(updated)
 
 
 def _member_out(member: OrganizationUser) -> MemberOut:

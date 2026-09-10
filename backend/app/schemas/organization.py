@@ -13,6 +13,11 @@ class OrganizationOut(BaseModel):
     plan: str
     status: OrganizationStatus
     created_at: datetime
+    # Sempre URLs assinadas de curta duração, nunca a storage_key crua —
+    # mesma política das fotos de ativo (ver asset_photo_service).
+    logo_light_url: str | None = None
+    logo_dark_url: str | None = None
+    favicon_url: str | None = None
 
     model_config = {"from_attributes": True}
 

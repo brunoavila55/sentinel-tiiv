@@ -31,6 +31,14 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=OrganizationStatus.ACTIVE,
         server_default=OrganizationStatus.ACTIVE.value,
     )
+    # Chaves de objeto no MinIO (mesmo bucket privado + URL assinada dos
+    # asset_photos). NULL = organização ainda sem identidade visual própria.
+    # Logo tem variante clara/escura porque a marca da organização pode não
+    # ter contraste suficiente contra os dois fundos; favicon fica único
+    # (ícone pequeno o bastante para não sofrer o mesmo problema).
+    logo_light_storage_key: Mapped[str | None] = mapped_column(String(1000), nullable=True, unique=True)
+    logo_dark_storage_key: Mapped[str | None] = mapped_column(String(1000), nullable=True, unique=True)
+    favicon_storage_key: Mapped[str | None] = mapped_column(String(1000), nullable=True, unique=True)
 
     memberships: Mapped[list["OrganizationUser"]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"
