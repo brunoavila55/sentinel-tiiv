@@ -36,6 +36,9 @@ export interface OrganizationOut {
   plan: string;
   status: OrganizationStatus;
   created_at: string;
+  logo_light_url: string | null;
+  logo_dark_url: string | null;
+  favicon_url: string | null;
 }
 
 export interface MemberOut {
