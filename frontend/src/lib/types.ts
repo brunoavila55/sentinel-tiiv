@@ -87,6 +87,11 @@ export interface AssetOut {
   ip_address: string | null;
   description: string | null;
   backup_notes: string | null;
+  credential_username: string | null;
+  // Vem null quando o papel do usuário não tem permissão de ver a senha,
+  // mesmo que uma senha esteja configurada — ver has_credentials.
+  credential_password: string | null;
+  has_credentials: boolean;
   site_id: string;
   site_name: string;
   parent_asset_id: string | null;

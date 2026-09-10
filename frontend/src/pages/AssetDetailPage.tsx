@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ImageOff } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, EyeOff, ImageOff } from "lucide-react";
 import {
   forwardRef,
   useImperativeHandle,
@@ -235,6 +235,15 @@ export function AssetDetailPage() {
       {assetId && <HistorySection assetId={assetId} />}
       {assetId && <PhotosSection ref={photosRef} assetId={assetId} canManage={canManage} />}
       {assetId && <BackupSection assetId={assetId} canManage={canManage} backupNotes={asset.backup_notes} />}
+      {assetId && (
+        <CredentialsSection
+          assetId={assetId}
+          canManage={canManage}
+          username={asset.credential_username}
+          password={asset.credential_password}
+          hasCredentials={asset.has_credentials}
+        />
+      )}
       {assetId && <MonitoringSection ref={monitoringRef} assetId={assetId} canManage={canManage} />}
     </div>
   );
@@ -644,6 +653,183 @@ function BackupSection({
             className="max-h-full max-w-full rounded-md object-contain"
           />
         </button>
+      )}
+    </div>
+  );
+}
+
+function CredentialsSection({
+  assetId,
+  canManage,
+  username,
+  password,
+  hasCredentials,
+}: {
+  assetId: string;
+  canManage: boolean;
+  username: string | null;
+  password: string | null;
+  hasCredentials: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [usernameValue, setUsernameValue] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [copiedField, setCopiedField] = useState<"user" | "pass" | null>(null);
+
+  function startEdit() {
+    setUsernameValue(username ?? "");
+    setPasswordValue("");
+    setError(null);
+    setEditing(true);
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: Record<string, string | null> = {
+        credential_username: usernameValue.trim() || null,
+      };
+      // Campo em branco = mantém a senha atual; só troca quando o usuário digita algo novo.
+      if (passwordValue) payload.credential_password = passwordValue;
+      await apiFetch(`/assets/${assetId}`, { method: "PATCH", body: JSON.stringify(payload) });
+      await queryClient.invalidateQueries({ queryKey: ["asset", assetId] });
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível salvar as credenciais.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove() {
+    if (!window.confirm("Remover as credenciais de acesso deste ativo?")) return;
+    setError(null);
+    try {
+      await apiFetch(`/assets/${assetId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ credential_username: null, credential_password: null }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["asset", assetId] });
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível remover as credenciais.");
+    }
+  }
+
+  async function handleCopy(value: string, field: "user" | "pass") {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    } catch {
+      // clipboard indisponível (ex.: contexto sem permissão) — ignorar silenciosamente
+    }
+  }
+
+  return (
+    <div id="credentials-section" className="space-y-3 border-t border-border pt-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium">Credenciais de acesso</h2>
+        {canManage && !editing && (
+          <button type="button" onClick={startEdit} className="text-xs text-muted-foreground hover:underline">
+            {hasCredentials ? "Editar" : "Adicionar credenciais"}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <form onSubmit={handleSave} className="max-w-sm space-y-3">
+          <div className="space-y-1">
+            <label htmlFor="cred-username" className="text-sm">
+              Usuário
+            </label>
+            <Input id="cred-username" value={usernameValue} onChange={(e) => setUsernameValue(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="cred-password" className="text-sm">
+              Senha
+            </label>
+            <Input
+              id="cred-password"
+              type="password"
+              value={passwordValue}
+              onChange={(e) => setPasswordValue(e.target.value)}
+              placeholder={hasCredentials ? "Deixe em branco para manter a atual" : ""}
+              autoComplete="new-password"
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>
+              Cancelar
+            </Button>
+            {hasCredentials && (
+              <Button type="button" variant="outline" size="sm" onClick={handleRemove}>
+                Remover credenciais
+              </Button>
+            )}
+          </div>
+        </form>
+      ) : !hasCredentials ? (
+        <p className="text-sm text-muted-foreground">Nenhuma credencial registrada.</p>
+      ) : (
+        <dl className="space-y-2 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-muted-foreground">Usuário</dt>
+            <dd className="flex items-center gap-1.5 font-mono text-xs">
+              {username ?? "—"}
+              {username && (
+                <button
+                  type="button"
+                  onClick={() => handleCopy(username, "user")}
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Copiar usuário"
+                >
+                  {copiedField === "user" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                </button>
+              )}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-muted-foreground">Senha</dt>
+            <dd className="flex items-center gap-1.5 font-mono text-xs">
+              {!canManage ? (
+                <span className="text-muted-foreground">Restrito ao seu papel</span>
+              ) : password ? (
+                <>
+                  {revealed ? password : "••••••••"}
+                  <button
+                    type="button"
+                    onClick={() => setRevealed((v) => !v)}
+                    className="text-muted-foreground hover:text-foreground"
+                    title={revealed ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    {revealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(password, "pass")}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Copiar senha"
+                  >
+                    {copiedField === "pass" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  </button>
+                </>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+        </dl>
       )}
     </div>
   );

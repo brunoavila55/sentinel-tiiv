@@ -1,14 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { StatusPill } from "@/components/StatusBadge";
 import { buttonVariants } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import type { AssetOut, AssetPhotoOut } from "@/lib/types";
 
 export function AssetInspector({ assetId, onClose }: { assetId: string; onClose: () => void }) {
+  const { currentMembership } = useAuth();
+  const canRevealCredentials =
+    currentMembership?.role === "owner" || currentMembership?.role === "admin" || currentMembership?.role === "operator";
   const assetQuery = useQuery({
     queryKey: ["asset", assetId],
     queryFn: () => apiFetch<AssetOut>(`/assets/${assetId}`),
@@ -24,6 +28,8 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
   const [copied, setCopied] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<AssetPhotoOut | null>(null);
   const [backupTextExpanded, setBackupTextExpanded] = useState(false);
+  const [passwordRevealed, setPasswordRevealed] = useState(false);
+  const [copiedCredential, setCopiedCredential] = useState<"user" | "pass" | null>(null);
 
   const asset = assetQuery.data;
   const mainPhoto = photosQuery.data?.[0];
@@ -37,6 +43,16 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
       await navigator.clipboard.writeText(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard indisponível (ex.: contexto sem permissão) — ignorar silenciosamente
+    }
+  };
+
+  const handleCopyCredential = async (value: string, field: "user" | "pass") => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedCredential(field);
+      setTimeout(() => setCopiedCredential(null), 1500);
     } catch {
       // clipboard indisponível (ex.: contexto sem permissão) — ignorar silenciosamente
     }
@@ -152,6 +168,62 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {asset.has_credentials && (
+            <div className="space-y-2 border-t border-border pt-3">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Credenciais de acesso
+              </h3>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">Usuário</dt>
+                  <dd className="flex items-center gap-1.5 font-mono text-xs">
+                    {asset.credential_username ?? "—"}
+                    {asset.credential_username && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCredential(asset.credential_username as string, "user")}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Copiar usuário"
+                      >
+                        {copiedCredential === "user" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      </button>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">Senha</dt>
+                  <dd className="flex items-center gap-1.5 font-mono text-xs">
+                    {!canRevealCredentials ? (
+                      <span className="text-muted-foreground">Restrito ao seu papel</span>
+                    ) : asset.credential_password ? (
+                      <>
+                        {passwordRevealed ? asset.credential_password : "••••••••"}
+                        <button
+                          type="button"
+                          onClick={() => setPasswordRevealed((v) => !v)}
+                          className="text-muted-foreground hover:text-foreground"
+                          title={passwordRevealed ? "Ocultar senha" : "Mostrar senha"}
+                        >
+                          {passwordRevealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyCredential(asset.credential_password as string, "pass")}
+                          className="text-muted-foreground hover:text-foreground"
+                          title="Copiar senha"
+                        >
+                          {copiedCredential === "pass" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        </button>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </div>
           )}
 

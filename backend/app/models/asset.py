@@ -44,6 +44,13 @@ class Asset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # credenciais de acesso ao sistema de backup etc.). Fotos relacionadas
     # ficam em `asset_photos` com category="backup".
     backup_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Credenciais de acesso ao ativo (ex.: login de administração do
+    # equipamento). O usuário fica em texto puro (não é segredo por si só);
+    # a senha nunca é gravada em texto puro — sempre criptografada com
+    # Fernet (app.core.encryption) e só decriptografada na camada de API,
+    # para roles com permissão (ver ROLES_WRITE_OPERATIONAL).
+    credential_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    credential_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     status: Mapped[AssetStatus] = mapped_column(
         asset_status_enum,

@@ -43,6 +43,10 @@ class AssetUpdateRequest(BaseModel):
     ip_address: str | None = Field(default=None, max_length=45)
     description: str | None = Field(default=None, max_length=2000)
     backup_notes: str | None = Field(default=None, max_length=20000)
+    credential_username: str | None = Field(default=None, max_length=255)
+    # Texto claro na requisição; a service layer criptografa antes de
+    # persistir (nunca chega ao banco ou ao log em texto puro).
+    credential_password: str | None = Field(default=None, max_length=500)
     enabled: bool | None = None
     parent_asset_id: uuid.UUID | None = None
 
@@ -64,6 +68,12 @@ class AssetOut(BaseModel):
     ip_address: str | None
     description: str | None
     backup_notes: str | None
+    credential_username: str | None
+    # Só vem preenchida (decriptografada) quando o papel do solicitante tem
+    # permissão para ver a senha (ver ROLES_WRITE_OPERATIONAL no router) —
+    # caso contrário vem None mesmo que exista uma senha configurada.
+    credential_password: str | None
+    has_credentials: bool
     site_id: uuid.UUID
     site_name: str
     parent_asset_id: uuid.UUID | None

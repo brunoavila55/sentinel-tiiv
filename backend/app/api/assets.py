@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.authorization import ROLES_WRITE_OPERATIONAL, require_role
 from app.core.database import get_db
 from app.core.dependencies import get_current_membership
+from app.core.encryption import decrypt_secret
 from app.models.asset import Asset
 from app.models.enums import AssetStatus
 from app.models.organization_user import OrganizationUser
@@ -20,9 +21,14 @@ router = APIRouter(prefix="/assets", tags=["assets"])
 MAX_LIMIT = 200
 
 
-def _asset_out(row: AssetDetailRow) -> AssetOut:
+def _asset_out(row: AssetDetailRow, *, reveal_credentials: bool) -> AssetOut:
     asset: Asset
     asset, site_name, checks_count, photos_count, parent_asset_id = row
+    credential_password = (
+        decrypt_secret(asset.credential_password_encrypted)
+        if reveal_credentials and asset.credential_password_encrypted
+        else None
+    )
     return AssetOut(
         id=asset.id,
         name=asset.name,
@@ -30,6 +36,9 @@ def _asset_out(row: AssetDetailRow) -> AssetOut:
         ip_address=str(asset.ip_address) if asset.ip_address is not None else None,
         description=asset.description,
         backup_notes=asset.backup_notes,
+        credential_username=asset.credential_username,
+        credential_password=credential_password,
+        has_credentials=bool(asset.credential_username) or bool(asset.credential_password_encrypted),
         site_id=asset.site_id,
         site_name=site_name,
         parent_asset_id=parent_asset_id,
@@ -69,7 +78,13 @@ async def list_assets(
         limit=limit,
         offset=offset,
     )
-    return AssetListResponse(items=[_asset_out(row) for row in rows], total=total, limit=limit, offset=offset)
+    reveal_credentials = membership.role in ROLES_WRITE_OPERATIONAL
+    return AssetListResponse(
+        items=[_asset_out(row, reveal_credentials=reveal_credentials) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
@@ -79,7 +94,7 @@ async def create_asset(
     db: AsyncSession = Depends(get_db),
 ) -> AssetOut:
     row = await asset_service.create_asset(db, membership.organization_id, payload, membership.user_id)
-    return _asset_out(row)
+    return _asset_out(row, reveal_credentials=True)
 
 
 @router.get("/{asset_id}", response_model=AssetOut)
@@ -89,7 +104,8 @@ async def get_asset(
     db: AsyncSession = Depends(get_db),
 ) -> AssetOut:
     row = await asset_service.get_asset_detail(db, membership.organization_id, asset_id)
-    return _asset_out(row)
+    reveal_credentials = membership.role in ROLES_WRITE_OPERATIONAL
+    return _asset_out(row, reveal_credentials=reveal_credentials)
 
 
 @router.patch("/{asset_id}", response_model=AssetOut)
@@ -100,7 +116,7 @@ async def update_asset(
     db: AsyncSession = Depends(get_db),
 ) -> AssetOut:
     row = await asset_service.update_asset(db, membership.organization_id, asset_id, payload, membership.user_id)
-    return _asset_out(row)
+    return _asset_out(row, reveal_credentials=True)
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -182,6 +182,67 @@ async def test_unknown_asset_returns_404_not_500(client: AsyncClient, db_session
     assert response.status_code == 404
 
 
+async def test_asset_credentials_are_encrypted_and_role_gated(client: AsyncClient, db_session: AsyncSession) -> None:
+    owner_headers, member = await _headers(
+        db_session, org_name="Org", email="owner@example.com", role=OrganizationRole.OWNER
+    )
+    site_id = await _create_site(client, owner_headers)
+    created = await client.post(
+        "/api/assets", headers=owner_headers, json={"name": "sw-1", "site_id": site_id, "ip_address": "10.0.0.5"}
+    )
+    asset_id = created.json()["id"]
+    assert created.json()["has_credentials"] is False
+
+    updated = await client.patch(
+        f"/api/assets/{asset_id}",
+        headers=owner_headers,
+        json={"credential_username": "admin", "credential_password": "s3cr3t"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["credential_username"] == "admin"
+    assert updated.json()["credential_password"] == "s3cr3t"
+    assert updated.json()["has_credentials"] is True
+
+    # A senha nunca é gravada em texto puro no banco.
+    from sqlalchemy import select
+
+    from app.models.asset import Asset
+
+    result = await db_session.execute(select(Asset).where(Asset.id == uuid.UUID(asset_id)))
+    asset = result.scalar_one()
+    assert asset.credential_password_encrypted is not None
+    assert "s3cr3t" not in asset.credential_password_encrypted
+
+    from app.models.organization_user import OrganizationUser
+
+    viewer = await create_org_member(
+        db_session, org_name="ignorado", email="viewer@example.com", role=OrganizationRole.VIEWER
+    )
+    db_session.add(
+        OrganizationUser(organization_id=member.organization.id, user_id=viewer.user.id, role=OrganizationRole.VIEWER)
+    )
+    await db_session.commit()
+    viewer_token, _ = create_access_token(viewer.user.id)
+    viewer_headers = {"Authorization": f"Bearer {viewer_token}", "X-Organization-Id": str(member.organization.id)}
+
+    as_viewer = await client.get(f"/api/assets/{asset_id}", headers=viewer_headers)
+    assert as_viewer.status_code == 200
+    # Usuário é visível a qualquer papel de leitura; a senha, não.
+    assert as_viewer.json()["credential_username"] == "admin"
+    assert as_viewer.json()["credential_password"] is None
+    assert as_viewer.json()["has_credentials"] is True
+
+    cleared = await client.patch(
+        f"/api/assets/{asset_id}",
+        headers=owner_headers,
+        json={"credential_username": None, "credential_password": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["credential_username"] is None
+    assert cleared.json()["credential_password"] is None
+    assert cleared.json()["has_credentials"] is False
+
+
 async def test_list_assets_sort_by_name(client: AsyncClient, db_session: AsyncSession) -> None:
     headers, _ = await _headers(db_session, org_name="Org", email="owner@example.com", role=OrganizationRole.OWNER)
     site_id = await _create_site(client, headers)

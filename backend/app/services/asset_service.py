@@ -3,6 +3,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.encryption import encrypt_secret
 from app.models.asset import Asset
 from app.models.enums import AssetStatus
 from app.repositories import asset_repository, site_repository
@@ -109,6 +110,12 @@ async def update_asset(
     parent_asset_id = data.pop("parent_asset_id", None)
     site_changed = "site_id" in data
 
+    # credential_password não é uma coluna de Asset (a coluna guarda o
+    # valor criptografado) — trata à parte do setattr genérico abaixo, pra
+    # nunca gravar a senha em texto puro.
+    credential_password_provided = "credential_password" in data
+    credential_password_value = data.pop("credential_password", None)
+
     if data.get("site_id") is not None:
         await _ensure_site_in_org(db, organization_id, data["site_id"])
 
@@ -124,6 +131,15 @@ async def update_asset(
     changed_fields = list(data.keys())
     for field, value in data.items():
         setattr(asset, field, value)
+
+    if credential_password_provided:
+        # String vazia/None limpa a credencial; qualquer outro valor é
+        # (re)criptografado. O valor em si nunca entra no audit log — só o
+        # nome do campo, via `changed_fields`.
+        asset.credential_password_encrypted = (
+            encrypt_secret(credential_password_value) if credential_password_value else None
+        )
+        changed_fields.append("credential_password")
 
     await audit_service.record(
         db,
