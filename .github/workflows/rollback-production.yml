@@ -8,17 +8,8 @@ on:
 
 jobs:
   rollback:
-    runs-on: ubuntu-latest
+    runs-on: sentinel-deploy
     environment: production
     steps:
-      - name: Rollback via SSH (volta pro slot anterior)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_SSH_HOST }}
-          username: ${{ secrets.DEPLOY_SSH_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          script: |
-            set -e
-            cd /root/sentinel-tiiv
-            bash deploy/prod-rollback.sh
+      - name: Rollback (volta pro slot anterior)
+        run: bash /home/deploy/apps/sentinel-tiiv/deploy/prod-rollback.sh

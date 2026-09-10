@@ -10,24 +10,16 @@ jobs:
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    # Runner self-hosted instalado dentro do próprio VM de produção — o
+    # firewall do servidor bloqueia SSH de fora (só libera uma faixa de IP
+    # conhecida), então em vez do GitHub tentar entrar, o agente roda local
+    # e puxa trabalho pra fora. Ver README, seção CI/CD.
+    runs-on: sentinel-deploy
     # Ambiente "production" do GitHub: se configurado com required
     # reviewers em Settings → Environments, o deploy pausa esperando
-    # aprovação manual antes de rodar o SSH abaixo. Opcional, mas
+    # aprovação manual antes de rodar o script abaixo. Opcional, mas
     # recomendado pra produção.
     environment: production
     steps:
-      - name: Deploy via SSH (blue-green)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_SSH_HOST }}
-          username: ${{ secrets.DEPLOY_SSH_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          # /root/sentinel-tiiv: checkout dedicado ao branch master no
-          # servidor (ver README, seção CI/CD). Se o caminho for outro na
-          # sua VM, ajuste aqui.
-          script: |
-            set -e
-            cd /root/sentinel-tiiv
-            bash deploy/prod-deploy.sh
+      - name: Deploy (blue-green)
+        run: bash /home/deploy/apps/sentinel-tiiv/deploy/prod-deploy.sh
