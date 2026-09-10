@@ -33,7 +33,16 @@ APP_COMPOSE="docker compose -f docker-compose.prod.app.yml -p sentinel-$NEW_SLOT
 # uvicorn sobem — ver backend/entrypoint.sh; o do frontend confirma que o
 # nginx já está respondendo) ou falha o script antes de qualquer coisa
 # tocar no Caddy. O slot antigo continua servindo tráfego o tempo todo.
-SLOT="$NEW_SLOT" $APP_COMPOSE up -d --build --wait
+if ! SLOT="$NEW_SLOT" $APP_COMPOSE up -d --build --wait; then
+    echo "--- Falha ao subir o slot $NEW_SLOT. Logs para diagnóstico: ---"
+    for svc in backend worker frontend; do
+        echo "--- $svc-$NEW_SLOT: docker logs (últimas 50 linhas) ---"
+        docker logs "$svc-$NEW_SLOT" --tail 50 || true
+        echo "--- $svc-$NEW_SLOT: health status ---"
+        docker inspect --format '{{json .State.Health}}' "$svc-$NEW_SLOT" || true
+    done
+    exit 1
+fi
 
 echo "Slot $NEW_SLOT saudável. Trocando Caddy para o slot $NEW_SLOT..."
 switch_caddy_to "$NEW_SLOT"
