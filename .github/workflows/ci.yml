@@ -32,8 +32,13 @@ jobs:
       - name: Instalar dependências de teste
         run: docker compose exec -T backend pip install -r requirements-dev.txt
 
+      # "pip install" roda como usuário não-root (Dockerfile do backend não
+      # usa root à toa — Prompt 25) e cai em --user install, colocando o
+      # executável pytest em ~/.local/bin, que não está no PATH. "python -m
+      # pytest" contorna isso lendo o pacote instalado, sem depender do
+      # script no PATH.
       - name: Rodar pytest
-        run: docker compose exec -T backend pytest -q
+        run: docker compose exec -T backend python -m pytest -q
 
       - name: Logs dos serviços (em caso de falha)
         if: failure()

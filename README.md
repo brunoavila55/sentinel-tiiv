@@ -248,7 +248,7 @@ possível hoje:
 
 ```bash
 docker compose exec backend pip install -r requirements-dev.txt  # uma vez
-docker compose exec backend pytest
+docker compose exec backend python -m pytest
 ```
 
 Suíte roda contra um banco `sentinel_test` separado (criado/recriado a cada
@@ -1067,15 +1067,45 @@ Workflows (`.github/workflows/`):
   lint/build/testes do frontend. Também exposto como `workflow_call`, reusado
   pelos dois workflows de deploy como gate.
 - **`deploy-staging.yml`** — em push para `staging`: roda `ci.yml` e, se
-  passar, conecta via SSH e executa `deploy/staging-deploy.sh` no servidor.
-  Staging é uma stack única e completa (`docker-compose.staging.yml`), com
-  Postgres/MinIO/bucket/domínio próprios — nunca compartilha dado com
-  produção, mesmo rodando na mesma VM.
+  passar, executa `deploy/staging-deploy.sh` no servidor (via runner
+  self-hosted, ver abaixo). Staging é uma stack única e completa
+  (`docker-compose.staging.yml`), com Postgres/MinIO/bucket/domínio
+  próprios — nunca compartilha dado com produção, mesmo rodando na mesma VM.
 - **`deploy-production.yml`** — em push para `master` (ou seja, no merge):
-  roda `ci.yml` e, se passar, executa `deploy/prod-deploy.sh` via SSH.
+  roda `ci.yml` e, se passar, executa `deploy/prod-deploy.sh`.
 - **`rollback-production.yml`** — só `workflow_dispatch` (botão manual em
   Actions). Roda `deploy/prod-rollback.sh`. Sem gatilho automático de
   propósito: rollback é sempre uma decisão humana.
+
+### Por que um runner self-hosted, não SSH
+
+O firewall do VM (`ufw`) bloqueia a porta 22 pra qualquer IP fora de uma
+faixa conhecida — os runners hospedados do GitHub têm IP dinâmico e nunca
+conseguiriam entrar. Abrir a porta pras faixas de IP do GitHub foi
+descartado: é um servidor multi-tenant (hospeda várias outras aplicações
+sem relação com este projeto) e essas faixas são grandes e compartilhadas
+com qualquer conta do GitHub Actions — aumentaria a superfície de ataque de
+todo mundo hospedado ali por causa de um projeto só.
+
+A solução: um runner self-hosted do GitHub Actions instalado dentro do
+próprio VM (usuário dedicado `deploy`, no grupo `docker`, sem privilégios de
+root — `/home/deploy/apps/sentinel-tiiv` e `/home/deploy/apps/sentinel-tiiv-staging`).
+Ele só faz conexões de saída pro GitHub (buscando trabalho), então o
+firewall de entrada continua exatamente como estava. Instalado como serviço
+systemd (`actions.runner.brunoavila55-sentinel-tiiv.sentinel-vm`), sobe
+sozinho com o boot do servidor.
+
+**Ressalva de segurança conhecida**: este repositório é público, e um
+runner self-hosted em repositório público normalmente é risco de execução
+de código arbitrário via Pull Request de estranhos. Nesse caso o risco é
+baixo porque os únicos workflows que usam o runner (`deploy-staging.yml`,
+`deploy-production.yml`, `rollback-production.yml`) disparam só em `push`
+direto pra `staging`/`master` ou em `workflow_dispatch` manual — ambos
+exigem permissão de escrita no repositório, PR de fora não aciona sozinho.
+`ci.yml` (que roda em qualquer PR, inclusive de forks) continua rodando em
+runner hospedado pelo GitHub (`ubuntu-latest`), nunca no self-hosted. Se um
+dia este repositório ganhar colaboradores externos com permissão de escrita,
+essa análise precisa ser refeita.
 
 ### Produção: blue-green de verdade
 
@@ -1109,32 +1139,46 @@ TLS em 80/443 e encaminha por domínio para portas internas — o Caddy deste
 projeto nunca fala HTTPS diretamente. Antes do primeiro deploy automático:
 
 ```bash
+useradd --create-home --shell /bin/bash deploy
+usermod -aG docker deploy
+mkdir -p /home/deploy/apps
+chown deploy:deploy /home/deploy/apps
+
 docker network create sentinel_net
 
-git clone <repo> /root/sentinel-tiiv            # branch master (produção)
-git clone <repo> /root/sentinel-tiiv-staging    # branch staging
+su - deploy
+git clone <repo> /home/deploy/apps/sentinel-tiiv            # branch master (produção)
+git clone <repo> /home/deploy/apps/sentinel-tiiv-staging    # branch staging
 
-cd /root/sentinel-tiiv-staging && git checkout staging
+cd /home/deploy/apps/sentinel-tiiv-staging && git checkout staging
 cp .env.staging.example .env.staging   # preencher os valores
 
-cd /root/sentinel-tiiv
+cd /home/deploy/apps/sentinel-tiiv
 cp .env.production.example .env.production   # preencher os valores
 bash deploy/prod-deploy.sh   # primeiro deploy, roda o slot "blue"
 ```
 
-Depois disso, cadastre em Settings → Secrets and variables → Actions do
-repositório no GitHub:
+Depois, instale o runner self-hosted (como usuário `deploy`, nunca root —
+o instalador do GitHub recusa rodar como root de propósito):
 
-```text
-DEPLOY_SSH_HOST
-DEPLOY_SSH_USER
-DEPLOY_SSH_KEY    # chave privada; a pública precisa estar em
-                  # authorized_keys do usuário de deploy no servidor
-DEPLOY_SSH_PORT   # opcional, default 22
+```bash
+su - deploy
+mkdir ~/actions-runner && cd ~/actions-runner
+curl -sO -L https://github.com/actions/runner/releases/download/vX.Y.Z/actions-runner-linux-x64-X.Y.Z.tar.gz
+tar xzf actions-runner-linux-x64-X.Y.Z.tar.gz
+# token em: Settings → Actions → Runners → New self-hosted runner
+./config.sh --url https://github.com/<owner>/<repo> --token <TOKEN> --labels sentinel-deploy --unattended
+exit   # volta pra root só pra instalar o serviço
+cd /home/deploy/actions-runner
+./svc.sh install deploy
+./svc.sh start
 ```
 
-E aponte no NPM os domínios de staging/produção para `localhost:8400` e
-`localhost:8300` respectivamente (mesmo modelo que já existe para produção).
+Por fim, no NPM, aponte os domínios de staging/produção para
+`177.72.80.11:8400` e `177.72.80.11:8300` respectivamente (o `127.0.0.1` não
+funciona como forward — o NPM roda em container Docker próprio, isolado do
+host; precisa do IP público real). Ver "Por que um runner self-hosted, não
+SSH" acima pra entender por que não é via segredo de SSH no GitHub.
 
 ## Débito técnico deixado intencionalmente
 

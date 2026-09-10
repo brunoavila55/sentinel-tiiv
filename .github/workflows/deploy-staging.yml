@@ -10,20 +10,11 @@ jobs:
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
-    environment: staging
+    # Runner self-hosted instalado dentro do próprio VM de produção — o
+    # firewall do servidor bloqueia SSH de fora (só libera uma faixa de IP
+    # conhecida), então em vez do GitHub tentar entrar, o agente roda local
+    # e puxa trabalho pra fora. Ver README, seção CI/CD.
+    runs-on: sentinel-deploy
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.DEPLOY_SSH_HOST }}
-          username: ${{ secrets.DEPLOY_SSH_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          # /root/sentinel-tiiv-staging: checkout dedicado ao branch
-          # staging no servidor (ver README, seção CI/CD). Se o caminho
-          # for outro na sua VM, ajuste aqui.
-          script: |
-            set -e
-            cd /root/sentinel-tiiv-staging
-            bash deploy/staging-deploy.sh
+      - name: Deploy staging
+        run: bash /home/deploy/apps/sentinel-tiiv-staging/deploy/staging-deploy.sh
