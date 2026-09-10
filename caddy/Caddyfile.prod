@@ -1,8 +1,11 @@
 {
-	email {$ACME_EMAIL}
+	auto_https off
 }
 
-{$DOMAIN} {
+# TLS é terminado pelo Nginx Proxy Manager já existente na VM (porta 80/443
+# em 177.72.80.11). Este Caddy só roteia por Host header em HTTP puro,
+# recebendo o tráfego que o NPM encaminha para a porta publicada abaixo.
+http://{$DOMAIN} {
 	handle /api/* {
 		reverse_proxy backend:8000
 	}
@@ -25,11 +28,10 @@
 	}
 }
 
-# Subdomínio dedicado só para a API S3 do MinIO, com seu próprio
-# certificado. É o host que aparece nas URLs assinadas devolvidas pela API
+# Subdomínio dedicado só para a API S3 do MinIO. Certificado também fica a
+# cargo do NPM. É o host que aparece nas URLs assinadas devolvidas pela API
 # (MINIO_PUBLIC_ENDPOINT) — o navegador baixa a foto direto daqui, sem
-# passar pelo backend. Precisa de um segundo registro DNS (A/AAAA) apontando
-# pro mesmo servidor.
-{$MINIO_DOMAIN} {
+# passar pelo backend.
+http://{$MINIO_DOMAIN} {
 	reverse_proxy minio:9000
 }
