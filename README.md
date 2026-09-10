@@ -248,7 +248,7 @@ possível hoje:
 
 ```bash
 docker compose exec backend pip install -r requirements-dev.txt  # uma vez
-docker compose exec backend pytest
+docker compose exec backend python -m pytest
 ```
 
 Suíte roda contra um banco `sentinel_test` separado (criado/recriado a cada
