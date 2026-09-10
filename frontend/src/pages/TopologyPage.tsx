@@ -177,17 +177,16 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
     setEdges(rawEdges);
 
     const timer = setTimeout(() => {
-      fitView({ padding: 0.2, duration: 200 });
-      if (pendingCenterId) {
-        const target = laidOut.find((n) => n.id === pendingCenterId);
-        if (target) {
-          setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
-            zoom: Math.max(getZoom(), 1),
-            duration: 300,
-          });
-        }
-        setPendingCenterId(null);
+      const target = pendingCenterId ? laidOut.find((n) => n.id === pendingCenterId) : undefined;
+      if (target) {
+        setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
+          zoom: Math.max(getZoom(), 1),
+          duration: 300,
+        });
+      } else {
+        fitView({ padding: 0.2, duration: 200 });
       }
+      if (pendingCenterId) setPendingCenterId(null);
     }, 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
