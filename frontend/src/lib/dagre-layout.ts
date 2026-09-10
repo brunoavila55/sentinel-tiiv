@@ -1,8 +1,8 @@
 import type { Edge, Node } from "@xyflow/react";
 import dagre from "dagre";
 
-export const NODE_WIDTH = 112;
-export const NODE_HEIGHT = 58;
+export const NODE_WIDTH = 176;
+export const NODE_HEIGHT = 32;
 
 export type LayoutDirection = "TB" | "LR";
 

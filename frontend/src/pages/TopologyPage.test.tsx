@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch } from "@/lib/api";
@@ -60,6 +60,38 @@ describe("TopologyPage", () => {
 
     // viewer não vê o botão de editar topologia.
     expect(screen.queryByRole("button", { name: /editar topologia/i })).not.toBeInTheDocument();
+  });
+
+  it("modo Flat recolhe netos por padrão, e a busca os revela", async () => {
+    mockedApiFetch.mockImplementation(async (path: unknown) => {
+      const p = String(path);
+      if (p.startsWith("/sites")) return [site];
+      if (p.startsWith("/topology")) {
+        return {
+          nodes: [
+            { id: "a1", name: "pop-raiz", status: "up", ip: "10.0.0.1", last_rtt_ms: 1, site: "Matriz", has_photo: false },
+            { id: "a2", name: "sw-meio", status: "up", ip: "10.0.0.2", last_rtt_ms: 1, site: "Matriz", has_photo: false },
+            { id: "a3", name: "ap-neto", status: "up", ip: "10.0.0.3", last_rtt_ms: 1, site: "Matriz", has_photo: false },
+          ],
+          edges: [
+            { id: "e1", source_asset_id: "a1", target_asset_id: "a2", link_type: "parent", created_at: "" },
+            { id: "e2", source_asset_id: "a2", target_asset_id: "a3", link_type: "parent", created_at: "" },
+          ],
+        };
+      }
+      throw new Error(`chamada inesperada: ${p}`);
+    });
+
+    renderWithProviders(<TopologyPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Flat" }));
+
+    await waitFor(() => expect(screen.getByText("sw-meio")).toBeInTheDocument());
+    expect(screen.queryByText("ap-neto")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/buscar ativo/i), { target: { value: "ap-neto" } });
+
+    await waitFor(() => expect(screen.getByText("ap-neto")).toBeInTheDocument());
   });
 
   it("mostra o estado vazio quando o site não tem ativos", async () => {

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Background,
   Controls,
@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { layoutWithDagre, NODE_HEIGHT, NODE_WIDTH, type LayoutDirection } from "@/lib/dagre-layout";
+import { ancestorChain, buildTreeIndex, collapseAtDepth, visibleDescendants } from "@/lib/topology-tree";
 import type { SiteOut, TopologyResponse } from "@/lib/types";
 
 const nodeTypes = { asset: AssetNode };
@@ -93,10 +94,15 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
   const queryClient = useQueryClient();
 
   const [direction, setDirection] = useState<LayoutDirection>("TB");
+  const [hierarchy, setHierarchy] = useState<"flat" | "full">("full");
   const [search, setSearch] = useState("");
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [pendingCenterId, setPendingCenterId] = useState<string | null>(null);
   const { fitView, setCenter, getZoom } = useReactFlow();
 
   const topologyQuery = useQuery({
@@ -104,45 +110,113 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
     queryFn: () => apiFetch<TopologyResponse>(`/topology?site_id=${siteId}`),
   });
 
+  const treeIndex = useMemo(
+    () => buildTreeIndex(topologyQuery.data?.nodes ?? [], topologyQuery.data?.edges ?? []),
+    [topologyQuery.data],
+  );
+
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<AssetNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Reseta o recolhimento e o foco sempre que os dados mudam (novo site,
+  // link criado/removido) ou o modo Flat/Completa é trocado. Um toggle
+  // manual de um nó específico feito depois disso fica valendo até a
+  // próxima mudança de dado/modo.
+  useEffect(() => {
+    if (!topologyQuery.data) return;
+    setFocusId(null);
+    setCollapsedIds(hierarchy === "flat" ? collapseAtDepth(treeIndex, 1) : new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topologyQuery.data, hierarchy]);
 
   useEffect(() => {
     if (!topologyQuery.data) return;
 
-    const rawNodes: Node<AssetNodeData>[] = topologyQuery.data.nodes.map((n) => ({
-      id: n.id,
-      type: "asset",
-      position: { x: 0, y: 0 },
-      data: { name: n.name, status: n.status, rtt: n.last_rtt_ms, direction, highlighted: false },
-    }));
-    const rawEdges: Edge[] = topologyQuery.data.edges.map((e) => ({
-      id: e.id,
-      source: e.source_asset_id,
-      target: e.target_asset_id,
-      style: { stroke: "var(--border)", strokeWidth: 1.5 },
-    }));
+    const startIds = focusId ? [focusId] : treeIndex.roots;
+    const visible = visibleDescendants(startIds, treeIndex, collapsedIds);
 
-    setNodes(layoutWithDagre(rawNodes, rawEdges, direction));
+    const rawNodes: Node<AssetNodeData>[] = topologyQuery.data.nodes
+      .filter((n) => visible.has(n.id))
+      .map((n) => {
+        const children = treeIndex.childrenOf.get(n.id) ?? [];
+        return {
+          id: n.id,
+          type: "asset",
+          position: { x: 0, y: 0 },
+          data: {
+            name: n.name,
+            status: n.status,
+            rtt: n.last_rtt_ms,
+            direction,
+            highlighted: n.id === highlightedId,
+            hasChildren: children.length > 0,
+            childCount: children.length,
+            collapsed: collapsedIds.has(n.id),
+            onToggleCollapse: (id: string) =>
+              setCollapsedIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              }),
+            onFocus: (id: string) => setFocusId(id),
+          },
+        };
+      });
+    const rawEdges: Edge[] = topologyQuery.data.edges
+      .filter((e) => visible.has(e.source_asset_id) && visible.has(e.target_asset_id))
+      .map((e) => ({
+        id: e.id,
+        source: e.source_asset_id,
+        target: e.target_asset_id,
+        style: { stroke: "var(--border)", strokeWidth: 1.5 },
+      }));
+
+    const laidOut = layoutWithDagre(rawNodes, rawEdges, direction);
+    setNodes(laidOut);
     setEdges(rawEdges);
 
-    const timer = setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 0);
+    const timer = setTimeout(() => {
+      fitView({ padding: 0.2, duration: 200 });
+      if (pendingCenterId) {
+        const target = laidOut.find((n) => n.id === pendingCenterId);
+        if (target) {
+          setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
+            zoom: Math.max(getZoom(), 1),
+            duration: 300,
+          });
+        }
+        setPendingCenterId(null);
+      }
+    }, 0);
     return () => clearTimeout(timer);
-  }, [topologyQuery.data, direction, fitView, setNodes, setEdges]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topologyQuery.data, direction, collapsedIds, focusId, highlightedId, treeIndex]);
 
   function handleSearch(term: string) {
     setSearch(term);
-    const match = term ? nodes.find((n) => n.data.name.toLowerCase().includes(term.toLowerCase())) : undefined;
-
-    setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, highlighted: n.id === match?.id } })));
-
-    if (match) {
-      setCenter(match.position.x + NODE_WIDTH / 2, match.position.y + NODE_HEIGHT / 2, {
-        zoom: Math.max(getZoom(), 1),
-        duration: 300,
-      });
+    if (!term || !topologyQuery.data) {
+      setHighlightedId(null);
+      return;
     }
+    const match = topologyQuery.data.nodes.find((n) => n.name.toLowerCase().includes(term.toLowerCase()));
+    if (!match) {
+      setHighlightedId(null);
+      return;
+    }
+
+    setFocusId(null);
+    const ancestors = ancestorChain(match.id, treeIndex).filter((id) => id !== match.id);
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      ancestors.forEach((id) => next.delete(id));
+      return next;
+    });
+    setHighlightedId(match.id);
+    setPendingCenterId(match.id);
   }
+
+  const breadcrumb = focusId ? ancestorChain(focusId, treeIndex) : null;
 
   function reorganize() {
     setNodes((nds) => layoutWithDagre(nds, edges, direction));
@@ -190,6 +264,28 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
       <div className="relative flex-1">
         <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-2">
           <SearchInput placeholder="Buscar ativo..." value={search} onChange={(e) => handleSearch(e.target.value)} className="w-48" />
+
+          <div className="flex overflow-hidden rounded-md border border-border">
+            <button
+              type="button"
+              onClick={() => setHierarchy("flat")}
+              className={`px-2 py-1 text-xs font-medium ${
+                hierarchy === "flat" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Flat
+            </button>
+            <button
+              type="button"
+              onClick={() => setHierarchy("full")}
+              className={`border-l border-border px-2 py-1 text-xs font-medium ${
+                hierarchy === "full" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Completa
+            </button>
+          </div>
+
           <Button variant="outline" size="sm" onClick={() => setDirection((d) => (d === "TB" ? "LR" : "TB"))}>
             {direction === "TB" ? "Vertical" : "Horizontal"}
           </Button>
@@ -213,6 +309,30 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
             </Button>
           )}
         </div>
+
+        {breadcrumb && topologyQuery.data && (
+          <div className="absolute top-14 left-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs">
+            <button type="button" onClick={() => setFocusId(null)} className="font-medium text-primary hover:underline">
+              Ver site inteiro
+            </button>
+            {breadcrumb.map((id) => {
+              const node = topologyQuery.data?.nodes.find((n) => n.id === id);
+              if (!node) return null;
+              return (
+                <span key={id} className="flex items-center gap-1">
+                  <span className="text-muted-foreground">/</span>
+                  <button
+                    type="button"
+                    onClick={() => setFocusId(id)}
+                    className={id === focusId ? "font-medium" : "text-muted-foreground hover:text-foreground"}
+                  >
+                    {node.name}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {editMode && (
           <div className="absolute inset-x-0 top-0 z-10 bg-primary py-1 text-center text-xs font-medium text-primary-foreground">

@@ -19,3 +19,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Dados de importação (podem conter informações reais de clientes/rede)
+topologia_nodes.xlsx
