@@ -11,7 +11,13 @@ from app.models.topology_link import TopologyLink
 
 
 async def list_nodes_for_site(db: AsyncSession, organization_id: uuid.UUID, site_id: uuid.UUID) -> Sequence[Row]:
-    has_photo = exists().where(AssetPhoto.asset_id == Asset.id).label("has_photo")
+    # Só considera fotos "general" — fotos de backup não devem acender o
+    # indicador de foto do node na topologia (elas vivem na seção de backup).
+    has_photo = (
+        exists()
+        .where(AssetPhoto.asset_id == Asset.id, AssetPhoto.category == "general")
+        .label("has_photo")
+    )
     stmt = select(Asset, has_photo).where(Asset.organization_id == organization_id, Asset.site_id == site_id)
     result = await db.execute(stmt)
     return result.all()

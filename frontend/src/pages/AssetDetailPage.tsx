@@ -130,6 +130,9 @@ export function AssetDetailPage() {
           <Button variant="outline" size="sm" onClick={() => scrollToSection("photos-section")}>
             Adicionar foto
           </Button>
+          <Button variant="outline" size="sm" onClick={() => scrollToSection("backup-section")}>
+            Backup
+          </Button>
           <Button variant="outline" size="sm" onClick={() => scrollToSection("monitoring-section")}>
             Editar monitoramento
           </Button>
@@ -180,13 +183,25 @@ export function AssetDetailPage() {
           </div>
         </div>
         <div className="text-sm">
-          <div className="text-muted-foreground">Último check</div>
-          <div>{asset.last_check_at ? relativeTime(asset.last_check_at) : "Nunca"}</div>
+          {asset.status === "up" ? (
+            <div>Online</div>
+          ) : asset.status === "warning" || asset.status === "down" ? (
+            <>
+              <div className="text-muted-foreground">Última vez online</div>
+              <div>{asset.status_since ? relativeTime(asset.status_since) : "Nunca"}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-muted-foreground">Último check</div>
+              <div>{asset.last_check_at ? relativeTime(asset.last_check_at) : "Nunca"}</div>
+            </>
+          )}
         </div>
       </div>
 
       {assetId && <HistorySection assetId={assetId} />}
       {assetId && <PhotosSection assetId={assetId} canManage={canManage} />}
+      {assetId && <BackupSection assetId={assetId} canManage={canManage} backupNotes={asset.backup_notes} />}
       {assetId && <MonitoringSection assetId={assetId} canManage={canManage} />}
     </div>
   );
@@ -380,6 +395,197 @@ function PhotosSection({ assetId, canManage }: { assetId: string; canManage: boo
                     Excluir
                   </button>
                 </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {lightboxPhoto && (
+        <button
+          type="button"
+          aria-label="Fechar imagem ampliada"
+          onClick={() => setLightboxPhoto(null)}
+          className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/70 p-8"
+        >
+          <img
+            src={lightboxPhoto.url}
+            alt={lightboxPhoto.caption ?? lightboxPhoto.filename}
+            className="max-h-full max-w-full rounded-md object-contain"
+          />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function BackupSection({
+  assetId,
+  canManage,
+  backupNotes,
+}: {
+  assetId: string;
+  canManage: boolean;
+  backupNotes: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<AssetPhotoOut | null>(null);
+
+  const [editingText, setEditingText] = useState(false);
+  const [textValue, setTextValue] = useState(backupNotes ?? "");
+  const [savingText, setSavingText] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
+
+  const photosQuery = useQuery({
+    queryKey: ["asset-photos", assetId, "backup"],
+    queryFn: () => apiFetch<AssetPhotoOut[]>(`/assets/${assetId}/photos?category=backup`),
+  });
+
+  async function refreshPhotos() {
+    await queryClient.invalidateQueries({ queryKey: ["asset-photos", assetId, "backup"] });
+  }
+
+  function startEditText() {
+    setTextValue(backupNotes ?? "");
+    setTextError(null);
+    setEditingText(true);
+  }
+
+  async function handleSaveText(event: FormEvent) {
+    event.preventDefault();
+    setSavingText(true);
+    setTextError(null);
+    try {
+      await apiFetch(`/assets/${assetId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ backup_notes: textValue.trim() || null }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["asset", assetId] });
+      setEditingText(false);
+    } catch (err) {
+      setTextError(err instanceof ApiError ? err.message : "Não foi possível salvar as informações de backup.");
+    } finally {
+      setSavingText(false);
+    }
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPhotoError(null);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("category", "backup");
+      await apiFetch(`/assets/${assetId}/photos`, { method: "POST", body: formData });
+      await refreshPhotos();
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : "Não foi possível enviar a foto.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeletePhoto(photo: AssetPhotoOut) {
+    if (!window.confirm("Remover esta foto de backup?")) return;
+    setPhotoError(null);
+    try {
+      await apiFetch(`/assets/${assetId}/photos/${photo.id}`, { method: "DELETE" });
+      if (lightboxPhoto?.id === photo.id) setLightboxPhoto(null);
+      await refreshPhotos();
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : "Não foi possível remover a foto.");
+    }
+  }
+
+  const photos = photosQuery.data ?? [];
+
+  return (
+    <div id="backup-section" className="space-y-3 border-t border-border pt-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium">Backup</h2>
+        {canManage && !editingText && (
+          <button type="button" onClick={startEditText} className="text-xs text-muted-foreground hover:underline">
+            {backupNotes ? "Editar" : "Adicionar informações"}
+          </button>
+        )}
+      </div>
+
+      {editingText ? (
+        <form onSubmit={handleSaveText} className="space-y-2">
+          <textarea
+            value={textValue}
+            onChange={(e) => setTextValue(e.target.value)}
+            rows={4}
+            placeholder="Local do backup, procedimento de restauração, retenção..."
+            className={`${fieldClass} w-full resize-y`}
+          />
+          {textError && <p className="text-sm text-destructive">{textError}</p>}
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={savingText}>
+              {savingText ? "Salvando..." : "Salvar"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditingText(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+          {backupNotes || "Nenhuma informação de backup registrada."}
+        </p>
+      )}
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Fotos do backup</span>
+        {canManage && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileChange}
+              className="hidden"
+              id="backup-photo-upload-input"
+            />
+            <Button size="sm" variant="outline" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+              {uploading ? "Enviando..." : "Adicionar foto"}
+            </Button>
+          </>
+        )}
+      </div>
+
+      {photoError && <p className="text-sm text-destructive">{photoError}</p>}
+      {photosQuery.isError && <p className="text-sm text-destructive">Não foi possível carregar as fotos.</p>}
+      {!photosQuery.isError && photos.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhuma foto de backup ainda.</p>
+      )}
+
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {photos.map((photo) => (
+            <div key={photo.id} className="space-y-1">
+              <button type="button" onClick={() => setLightboxPhoto(photo)} className="block w-full">
+                <img
+                  src={photo.thumbnail_url}
+                  alt={photo.caption ?? photo.filename}
+                  className="aspect-square w-full rounded-md border border-border object-cover"
+                />
+              </button>
+              {photo.caption && <div className="truncate text-xs text-muted-foreground">{photo.caption}</div>}
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => handleDeletePhoto(photo)}
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Excluir
+                </button>
               )}
             </div>
           ))}

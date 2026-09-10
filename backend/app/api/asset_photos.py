@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.authorization import ROLES_WRITE_OPERATIONAL, require_role
@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_membership
 from app.models.asset_photo import AssetPhoto
 from app.models.organization_user import OrganizationUser
-from app.schemas.asset_photo import AssetPhotoOut, AssetPhotoUpdateRequest
+from app.schemas.asset_photo import AssetPhotoOut, AssetPhotoUpdateRequest, PhotoCategory
 from app.services import asset_photo_service
 
 router = APIRouter(prefix="/assets/{asset_id}/photos", tags=["asset-photos"])
@@ -24,6 +24,7 @@ def _photo_out(photo: AssetPhoto) -> AssetPhotoOut:
         size_bytes=photo.size_bytes,
         caption=photo.caption,
         position=photo.position,
+        category=photo.category,
         is_primary=photo.position == 0,
         url=url,
         thumbnail_url=thumbnail_url,
@@ -34,10 +35,11 @@ def _photo_out(photo: AssetPhoto) -> AssetPhotoOut:
 @router.get("", response_model=list[AssetPhotoOut])
 async def list_photos(
     asset_id: uuid.UUID,
+    category: PhotoCategory = Query(default="general"),
     membership: OrganizationUser = Depends(get_current_membership),
     db: AsyncSession = Depends(get_db),
 ) -> list[AssetPhotoOut]:
-    photos = await asset_photo_service.list_photos(db, membership.organization_id, asset_id)
+    photos = await asset_photo_service.list_photos(db, membership.organization_id, asset_id, category)
     return [_photo_out(p) for p in photos]
 
 
@@ -46,6 +48,7 @@ async def upload_photo(
     asset_id: uuid.UUID,
     file: UploadFile = File(...),
     caption: str | None = Form(default=None),
+    category: PhotoCategory = Form(default="general"),
     membership: OrganizationUser = Depends(require_role(*ROLES_WRITE_OPERATIONAL)),
     db: AsyncSession = Depends(get_db),
 ) -> AssetPhotoOut:
@@ -58,6 +61,7 @@ async def upload_photo(
         content_type=file.content_type or "application/octet-stream",
         content=content,
         caption=caption,
+        category=category,
         uploaded_by=membership.user_id,
     )
     return _photo_out(photo)

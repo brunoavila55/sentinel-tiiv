@@ -40,6 +40,10 @@ class Asset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Texto livre com informações de backup do ativo (local, procedimento,
+    # credenciais de acesso ao sistema de backup etc.). Fotos relacionadas
+    # ficam em `asset_photos` com category="backup".
+    backup_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     status: Mapped[AssetStatus] = mapped_column(
         asset_status_enum,

@@ -71,23 +71,34 @@ async def test_history_returns_results_ordered_newest_first(client: AsyncClient,
     assert body[2]["status"] == "up"  # mais antigo por último
 
 
-async def test_history_respects_from_to_and_limit(client: AsyncClient, db_session: AsyncSession) -> None:
+async def test_history_only_lists_status_transitions(client: AsyncClient, db_session: AsyncSession) -> None:
+    """Histórico mostra só quedas e retornos (transições de status), não
+    cada ping de rotina — dois checks UP seguidos não geram duas linhas."""
     headers, asset = await _org_with_asset(db_session, org_name="Org", email="owner@example.com")
     check = await _make_check(db_session, asset)
 
     now = datetime.now(timezone.utc)
-    for minutes_ago in (60, 30, 10, 1):
-        await _add_check_result(
-            db_session, asset, check, status=AssetStatus.UP, checked_at=now - timedelta(minutes=minutes_ago)
-        )
+    # down (120), up (60), down (30), up (10), up (1) — o último "up" é
+    # continuação do anterior, não uma transição nova.
+    await _add_check_result(db_session, asset, check, status=AssetStatus.DOWN, checked_at=now - timedelta(minutes=120))
+    await _add_check_result(db_session, asset, check, status=AssetStatus.UP, checked_at=now - timedelta(minutes=60))
+    await _add_check_result(db_session, asset, check, status=AssetStatus.DOWN, checked_at=now - timedelta(minutes=30))
+    await _add_check_result(db_session, asset, check, status=AssetStatus.UP, checked_at=now - timedelta(minutes=10))
+    await _add_check_result(db_session, asset, check, status=AssetStatus.UP, checked_at=now - timedelta(minutes=1))
+
+    full = await client.get(f"/api/assets/{asset.id}/history", headers=headers)
+    assert full.status_code == 200
+    assert len(full.json()) == 4  # as 5 checagens viram 4 transições
 
     since = (now - timedelta(minutes=35)).isoformat()
     response = await client.get(f"/api/assets/{asset.id}/history", headers=headers, params={"from": since})
     assert response.status_code == 200
-    assert len(response.json()) == 3  # os de 30, 10 e 1 minuto atrás (60 fica de fora)
+    # dentro da janela: down (30) e up (10) são transições; up (1) não é
+    assert len(response.json()) == 2
 
     limited = await client.get(f"/api/assets/{asset.id}/history?limit=1", headers=headers)
     assert len(limited.json()) == 1
+    assert limited.json()[0]["status"] == "up"  # transição mais recente (10 min atrás)
 
 
 async def test_history_isolated_between_organizations(client: AsyncClient, db_session: AsyncSession) -> None:

@@ -106,7 +106,11 @@ async def list_assets(
 ) -> Sequence[AssetDetailRow]:
     clauses = _filters(organization_id, search=search, site_id=site_id, status=status, enabled=enabled)
     checks_count = func.count(func.distinct(Check.id)).label("checks_count")
-    photos_count = func.count(func.distinct(AssetPhoto.id)).label("photos_count")
+    # Só conta fotos "general" — fotos de backup pertencem à seção de
+    # backup, não à galeria principal que este contador representa.
+    photos_count = func.count(func.distinct(AssetPhoto.id)).filter(AssetPhoto.category == "general").label(
+        "photos_count"
+    )
     parent_asset_id = _parent_asset_id_expr().label("parent_asset_id")
     stmt = (
         select(Asset, Site.name, checks_count, photos_count, parent_asset_id)
@@ -125,7 +129,9 @@ async def list_assets(
 
 async def get_by_id(db: AsyncSession, organization_id: uuid.UUID, asset_id: uuid.UUID) -> AssetDetailRow | None:
     checks_count = func.count(func.distinct(Check.id)).label("checks_count")
-    photos_count = func.count(func.distinct(AssetPhoto.id)).label("photos_count")
+    photos_count = func.count(func.distinct(AssetPhoto.id)).filter(AssetPhoto.category == "general").label(
+        "photos_count"
+    )
     parent_asset_id = _parent_asset_id_expr().label("parent_asset_id")
     stmt = (
         select(Asset, Site.name, checks_count, photos_count, parent_asset_id)

@@ -268,7 +268,9 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
         )}
       </div>
 
-      {selectedAssetId && <AssetInspector assetId={selectedAssetId} onClose={() => setSelectedAssetId(null)} />}
+      {selectedAssetId && (
+        <AssetInspector key={selectedAssetId} assetId={selectedAssetId} onClose={() => setSelectedAssetId(null)} />
+      )}
     </div>
   );
 }

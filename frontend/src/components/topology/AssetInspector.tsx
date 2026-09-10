@@ -17,10 +17,18 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
     queryKey: ["asset-photos", assetId],
     queryFn: () => apiFetch<AssetPhotoOut[]>(`/assets/${assetId}/photos`),
   });
+  const backupPhotosQuery = useQuery({
+    queryKey: ["asset-photos", assetId, "backup"],
+    queryFn: () => apiFetch<AssetPhotoOut[]>(`/assets/${assetId}/photos?category=backup`),
+  });
   const [copied, setCopied] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState<AssetPhotoOut | null>(null);
+  const [backupTextExpanded, setBackupTextExpanded] = useState(false);
 
   const asset = assetQuery.data;
   const mainPhoto = photosQuery.data?.[0];
+  const backupPhotos = backupPhotosQuery.data ?? [];
+  const hasBackupInfo = Boolean(asset?.backup_notes) || backupPhotos.length > 0;
   const address = asset?.ip_address ?? asset?.hostname ?? null;
 
   const handleCopyAddress = async () => {
@@ -105,10 +113,67 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
             </p>
           )}
 
+          {hasBackupInfo && (
+            <div className="space-y-2 border-t border-border pt-3">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Backup</h3>
+              {asset.backup_notes && (
+                <div className="space-y-1">
+                  <p
+                    className={`whitespace-pre-wrap text-sm ${backupTextExpanded ? "" : "line-clamp-3"}`}
+                  >
+                    {asset.backup_notes}
+                  </p>
+                  {asset.backup_notes.length > 160 && (
+                    <button
+                      type="button"
+                      onClick={() => setBackupTextExpanded((v) => !v)}
+                      className="text-xs text-muted-foreground hover:underline"
+                    >
+                      {backupTextExpanded ? "Ver menos" : "Ver mais"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {backupPhotos.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {backupPhotos.slice(0, 4).map((photo) => (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      onClick={() => setLightboxPhoto(photo)}
+                      className="block"
+                    >
+                      <img
+                        src={photo.thumbnail_url}
+                        alt={photo.caption ?? photo.filename}
+                        className="aspect-square w-full rounded-md border border-border object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <Link to={`/assets/${asset.id}`} className={buttonVariants({ size: "sm", className: "w-full" })}>
             Ver ativo
           </Link>
         </div>
+      )}
+
+      {lightboxPhoto && (
+        <button
+          type="button"
+          aria-label="Fechar imagem ampliada"
+          onClick={() => setLightboxPhoto(null)}
+          className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/70 p-8"
+        >
+          <img
+            src={lightboxPhoto.url}
+            alt={lightboxPhoto.caption ?? lightboxPhoto.filename}
+            className="max-h-full max-w-full rounded-md object-contain"
+          />
+        </button>
       )}
     </aside>
   );

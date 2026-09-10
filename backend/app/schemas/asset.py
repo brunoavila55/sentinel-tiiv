@@ -42,6 +42,7 @@ class AssetUpdateRequest(BaseModel):
     hostname: str | None = Field(default=None, max_length=255)
     ip_address: str | None = Field(default=None, max_length=45)
     description: str | None = Field(default=None, max_length=2000)
+    backup_notes: str | None = Field(default=None, max_length=4000)
     enabled: bool | None = None
     parent_asset_id: uuid.UUID | None = None
 
@@ -62,6 +63,7 @@ class AssetOut(BaseModel):
     hostname: str | None
     ip_address: str | None
     description: str | None
+    backup_notes: str | None
     site_id: uuid.UUID
     site_name: str
     parent_asset_id: uuid.UUID | None
@@ -70,6 +72,10 @@ class AssetOut(BaseModel):
     last_rtt_ms: float | None
     packet_loss: float | None
     last_check_at: datetime | None
+    # Desde quando o status atual vale — usado pelo frontend pra saber há
+    # quanto tempo o ativo está no ar (status="up") ou desde quando ficou
+    # offline (status="down"/"warning"), sem expor cada ping individual.
+    status_since: datetime | None
     checks_count: int
     photos_count: int
     created_at: datetime

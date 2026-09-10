@@ -1,7 +1,14 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+# "general" é a galeria principal do ativo (Prompt 08); "backup" é a seção
+# de backup do ativo. Fechado por enquanto — nada no domínio hoje precisa
+# de mais categorias, mas a coluna é string livre (ver AssetPhoto.category)
+# para não exigir migration se isso mudar.
+PhotoCategory = Literal["general", "backup"]
 
 
 class AssetPhotoOut(BaseModel):
@@ -12,6 +19,7 @@ class AssetPhotoOut(BaseModel):
     size_bytes: int
     caption: str | None
     position: int
+    category: str
     is_primary: bool
     url: str
     thumbnail_url: str

@@ -23,9 +23,11 @@ async def _ensure_asset_in_org(db: AsyncSession, organization_id: uuid.UUID, ass
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ativo não encontrado")
 
 
-async def list_photos(db: AsyncSession, organization_id: uuid.UUID, asset_id: uuid.UUID) -> list[AssetPhoto]:
+async def list_photos(
+    db: AsyncSession, organization_id: uuid.UUID, asset_id: uuid.UUID, category: str = "general"
+) -> list[AssetPhoto]:
     await _ensure_asset_in_org(db, organization_id, asset_id)
-    return await asset_photo_repository.list_for_asset(db, organization_id, asset_id)
+    return await asset_photo_repository.list_for_asset(db, organization_id, asset_id, category)
 
 
 async def upload_photo(
@@ -37,6 +39,7 @@ async def upload_photo(
     content_type: str,
     content: bytes,
     caption: str | None,
+    category: str = "general",
     uploaded_by: uuid.UUID,
 ) -> AssetPhoto:
     await _ensure_asset_in_org(db, organization_id, asset_id)
@@ -61,7 +64,7 @@ async def upload_photo(
         await storage.delete(key)
         raise
 
-    position = await asset_photo_repository.next_position(db, asset_id)
+    position = await asset_photo_repository.next_position(db, asset_id, category)
     photo = await asset_photo_repository.create(
         db,
         organization_id=organization_id,
@@ -73,6 +76,7 @@ async def upload_photo(
         size_bytes=len(content),
         caption=caption,
         position=position,
+        category=category,
         uploaded_by=uploaded_by,
     )
     await db.flush()
@@ -83,7 +87,7 @@ async def upload_photo(
         action="asset.photo_uploaded",
         entity_type="asset_photo",
         entity_id=photo.id,
-        metadata={"asset_id": str(asset_id), "filename": filename},
+        metadata={"asset_id": str(asset_id), "filename": filename, "category": category},
     )
     await db.commit()
     await db.refresh(photo)
@@ -102,7 +106,9 @@ async def _get_or_404(
 async def _reorder(
     db: AsyncSession, organization_id: uuid.UUID, asset_id: uuid.UUID, target: AssetPhoto, new_position: int
 ) -> None:
-    photos = await asset_photo_repository.list_for_asset(db, organization_id, asset_id)
+    # Reordena somente dentro da mesma categoria do alvo — "principal" da
+    # galeria geral e a ordem das fotos de backup são sequências independentes.
+    photos = await asset_photo_repository.list_for_asset(db, organization_id, asset_id, target.category)
     new_position = max(0, min(new_position, len(photos) - 1))
     old_position = target.position
     if new_position == old_position:

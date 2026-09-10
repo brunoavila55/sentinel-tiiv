@@ -83,6 +83,7 @@ export interface AssetOut {
   hostname: string | null;
   ip_address: string | null;
   description: string | null;
+  backup_notes: string | null;
   site_id: string;
   site_name: string;
   parent_asset_id: string | null;
@@ -91,6 +92,7 @@ export interface AssetOut {
   last_rtt_ms: number | null;
   packet_loss: number | null;
   last_check_at: string | null;
+  status_since: string | null;
   checks_count: number;
   photos_count: number;
   created_at: string;
@@ -119,6 +121,7 @@ export interface AssetPhotoOut {
   size_bytes: number;
   caption: string | null;
   position: number;
+  category: "general" | "backup";
   is_primary: boolean;
   url: string;
   thumbnail_url: string;

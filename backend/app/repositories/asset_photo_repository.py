@@ -7,11 +7,15 @@ from app.models.asset_photo import AssetPhoto
 
 
 async def list_for_asset(
-    db: AsyncSession, organization_id: uuid.UUID, asset_id: uuid.UUID
+    db: AsyncSession, organization_id: uuid.UUID, asset_id: uuid.UUID, category: str
 ) -> list[AssetPhoto]:
     result = await db.execute(
         select(AssetPhoto)
-        .where(AssetPhoto.organization_id == organization_id, AssetPhoto.asset_id == asset_id)
+        .where(
+            AssetPhoto.organization_id == organization_id,
+            AssetPhoto.asset_id == asset_id,
+            AssetPhoto.category == category,
+        )
         .order_by(AssetPhoto.position)
     )
     return list(result.scalars().all())
@@ -30,8 +34,12 @@ async def get_by_id(
     return result.scalar_one_or_none()
 
 
-async def next_position(db: AsyncSession, asset_id: uuid.UUID) -> int:
-    result = await db.execute(select(func.max(AssetPhoto.position)).where(AssetPhoto.asset_id == asset_id))
+async def next_position(db: AsyncSession, asset_id: uuid.UUID, category: str) -> int:
+    result = await db.execute(
+        select(func.max(AssetPhoto.position)).where(
+            AssetPhoto.asset_id == asset_id, AssetPhoto.category == category
+        )
+    )
     current_max = result.scalar_one()
     return 0 if current_max is None else current_max + 1
 

@@ -31,6 +31,11 @@ class AssetPhoto(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     caption: Mapped[str | None] = mapped_column(String(500), nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # "general" (galeria principal do ativo) ou "backup" (fotos da seção de
+    # backup). Posição e "foto principal" são calculadas por categoria —
+    # ver asset_photo_service. String livre (sem CHECK), no mesmo espírito
+    # de TopologyLink.link_type: novas categorias podem chegar sem migration.
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="general", server_default="general")
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
