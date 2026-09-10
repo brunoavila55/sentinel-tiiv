@@ -50,6 +50,12 @@ export class ApiError extends Error {
       message = detail;
     } else if (detail && typeof detail === "object" && (detail as { error?: string }).error === "entitlement_limit_reached") {
       message = formatEntitlementDetail(detail as Parameters<typeof formatEntitlementDetail>[0]);
+    } else if (Array.isArray(detail)) {
+      // Erros de validação do FastAPI/Pydantic: lista de {loc, msg, type}.
+      message = detail
+        .map((e) => (e && typeof e === "object" && "msg" in e ? String((e as { msg: unknown }).msg) : null))
+        .filter((m): m is string => Boolean(m))
+        .join("; ") || undefined;
     }
     super(message ?? `Erro ${status}`);
     this.status = status;

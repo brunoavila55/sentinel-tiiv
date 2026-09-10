@@ -42,7 +42,7 @@ class AssetUpdateRequest(BaseModel):
     hostname: str | None = Field(default=None, max_length=255)
     ip_address: str | None = Field(default=None, max_length=45)
     description: str | None = Field(default=None, max_length=2000)
-    backup_notes: str | None = Field(default=None, max_length=4000)
+    backup_notes: str | None = Field(default=None, max_length=20000)
     enabled: bool | None = None
     parent_asset_id: uuid.UUID | None = None
 
