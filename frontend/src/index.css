@@ -150,3 +150,24 @@
     @apply font-sans;
     }
 }
+
+/*
+  @xyflow/react/dist/style.css hard-codes cores claras para o chrome dos
+  controles de zoom/fit-view (não é conteúdo do grafo, que já usa nossas
+  variáveis). Sem isto, o widget fica branco fixo sobre o canvas escuro.
+*/
+.react-flow__controls-button {
+  background-color: var(--card);
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+.react-flow__controls-button:hover {
+  background-color: var(--muted);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+.react-flow__attribution {
+  background-color: color-mix(in oklch, var(--card), transparent 20%);
+  color: var(--muted-foreground);
+}

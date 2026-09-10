@@ -3,7 +3,7 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { StatusBadge } from "@/components/StatusBadge";
+import { StatusPill } from "@/components/StatusBadge";
 import { buttonVariants } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import type { AssetOut, AssetPhotoOut } from "@/lib/types";
@@ -61,13 +61,13 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
             <img
               src={mainPhoto.url}
               alt={mainPhoto.caption ?? asset.name}
-              className="aspect-video w-full rounded-md border border-border object-cover"
+              className="aspect-video w-full rounded-lg border border-border object-cover"
             />
           )}
 
-          <div>
+          <div className="space-y-1">
             <h2 className="text-base font-semibold">{asset.name}</h2>
-            <StatusBadge status={asset.status} className="mt-1 text-sm" />
+            <StatusPill status={asset.status} />
           </div>
 
           <dl className="space-y-2 text-sm">
@@ -146,7 +146,7 @@ export function AssetInspector({ assetId, onClose }: { assetId: string; onClose:
                       <img
                         src={photo.thumbnail_url}
                         alt={photo.caption ?? photo.filename}
-                        className="aspect-square w-full rounded-md border border-border object-cover"
+                        className="aspect-square w-full rounded-lg border border-border object-cover"
                       />
                     </button>
                   ))}

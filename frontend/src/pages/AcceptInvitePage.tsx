@@ -1,13 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { AuthShell } from "@/components/AuthShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { ROLE_LABELS, type AccessTokenResponse, type InvitePreviewOut } from "@/lib/types";
-
-const fieldClass =
-  "w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 export function AcceptInvitePage() {
   const [params] = useSearchParams();
@@ -52,23 +51,23 @@ export function AcceptInvitePage() {
 
   if (previewError) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+      <AuthShell>
         <p className="text-sm text-destructive">{previewError}</p>
-      </main>
+      </AuthShell>
     );
   }
 
   if (!preview) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+      <AuthShell>
         <p className="text-sm text-muted-foreground">Carregando convite...</p>
-      </main>
+      </AuthShell>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-md border border-border p-6">
+    <AuthShell>
+      <form onSubmit={handleSubmit} className="w-full space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
         <div>
           <h1 className="text-lg font-semibold">Convite para {preview.organization_name}</h1>
           <p className="text-sm text-muted-foreground">
@@ -81,7 +80,7 @@ export function AcceptInvitePage() {
             <label htmlFor="name" className="text-sm font-medium">
               Seu nome
             </label>
-            <input id="name" required value={name} onChange={(e) => setName(e.target.value)} className={fieldClass} />
+            <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
           </div>
         )}
 
@@ -89,15 +88,7 @@ export function AcceptInvitePage() {
           <label htmlFor="password" className="text-sm font-medium">
             {preview.account_exists ? "Senha da sua conta" : "Crie uma senha"}
           </label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={fieldClass}
-          />
+          <Input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
 
         {submitError && <p className="text-sm text-destructive">{submitError}</p>}
@@ -106,6 +97,6 @@ export function AcceptInvitePage() {
           {submitting ? "Aceitando..." : preview.account_exists ? "Entrar e aceitar" : "Criar conta e aceitar"}
         </Button>
       </form>
-    </main>
+    </AuthShell>
   );
 }

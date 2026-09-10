@@ -1,10 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, Server } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { AssetForm, emptyAssetForm, type AssetFormValues } from "@/components/AssetForm";
+import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -15,18 +21,15 @@ import {
   type SiteOut,
 } from "@/lib/types";
 
-const fieldClass =
-  "rounded-md border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring";
-
 const STATUS_OPTIONS: AssetStatus[] = ["unknown", "up", "warning", "down"];
 const PAGE_SIZE = 20;
 
-const SORTABLE_COLUMNS: { key: string; label: string }[] = [
+const SORTABLE_COLUMNS: { key: string; label: string; align?: "right" }[] = [
   { key: "name", label: "Nome" },
   { key: "status", label: "Status" },
   { key: "site_name", label: "Site" },
-  { key: "last_rtt_ms", label: "RTT" },
-  { key: "packet_loss", label: "Perda" },
+  { key: "last_rtt_ms", label: "RTT", align: "right" },
+  { key: "packet_loss", label: "Perda", align: "right" },
   { key: "last_check_at", label: "Última checagem" },
 ];
 
@@ -144,35 +147,36 @@ export function AssetsPage() {
   const total = assetsQuery.data?.total ?? 0;
   const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const to = Math.min(total, (page + 1) * PAGE_SIZE);
+  const items = assetsQuery.data?.items ?? [];
+  const hasNoSites = canManage && sitesQuery.data?.length === 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Ativos</h1>
-        {canManage && !showForm && (
-          <Button size="sm" onClick={startCreate}>
-            Novo ativo
-          </Button>
-        )}
+        <div>
+          <h1 className="text-lg font-semibold">Ativos</h1>
+          <p className="text-sm text-muted-foreground">{total > 0 ? `${total} cadastrados` : "Nenhum ativo cadastrado ainda"}</p>
+        </div>
+        {canManage && !showForm && <Button size="sm" onClick={startCreate}>Novo ativo</Button>}
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <input
+        <SearchInput
           placeholder="Buscar por nome, hostname ou IP"
           value={search}
           onChange={(e) => {
             setPage(0);
             setSearch(e.target.value);
           }}
-          className={`${fieldClass} w-64`}
+          className="w-64"
         />
-        <select
+        <Select
           value={siteFilter}
           onChange={(e) => {
             setPage(0);
             setSiteFilter(e.target.value);
           }}
-          className={fieldClass}
+          className="w-40"
         >
           <option value="">Todos os sites</option>
           {sitesQuery.data?.map((site) => (
@@ -180,14 +184,14 @@ export function AssetsPage() {
               {site.name}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           value={statusFilter}
           onChange={(e) => {
             setPage(0);
             setStatusFilter(e.target.value as AssetStatus | "");
           }}
-          className={fieldClass}
+          className="w-40"
         >
           <option value="">Todos os status</option>
           {STATUS_OPTIONS.map((s) => (
@@ -195,19 +199,19 @@ export function AssetsPage() {
               {STATUS_LABELS[s]}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           value={enabledFilter}
           onChange={(e) => {
             setPage(0);
             setEnabledFilter(e.target.value as "" | "true" | "false");
           }}
-          className={fieldClass}
+          className="w-52"
         >
           <option value="">Habilitados e desabilitados</option>
           <option value="true">Só habilitados</option>
           <option value="false">Só desabilitados</option>
-        </select>
+        </Select>
       </div>
 
       {canManage && showForm && (
@@ -237,107 +241,105 @@ export function AssetsPage() {
 
       {listError && <p className="text-sm text-destructive">{listError}</p>}
 
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border text-left text-muted-foreground">
-            <tr>
-              {SORTABLE_COLUMNS.map((col) => (
-                <th key={col.key} className="px-3 py-2 font-medium">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort(col.key)}
-                    className="inline-flex items-center gap-1 hover:text-foreground"
-                  >
-                    {col.label}
-                    {sort === col.key && <span aria-hidden="true">↑</span>}
-                    {sort === `-${col.key}` && <span aria-hidden="true">↓</span>}
-                  </button>
-                </th>
-              ))}
-              <th className="px-3 py-2 font-medium">IP / Hostname</th>
-              {canManage && <th className="px-3 py-2 font-medium">Ações</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {assetsQuery.isLoading && (
-              <tr>
-                <td colSpan={8} className="px-3 py-4 text-muted-foreground">
-                  Carregando...
-                </td>
-              </tr>
-            )}
-            {assetsQuery.isError && (
-              <tr>
-                <td colSpan={8} className="px-3 py-4 text-destructive">
-                  Não foi possível carregar os ativos.
-                </td>
-              </tr>
-            )}
-            {assetsQuery.data?.items.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-4 text-muted-foreground">
-                  Nenhum ativo encontrado.{" "}
-                  {canManage && sitesQuery.data?.length === 0 && "Crie um site antes de cadastrar ativos."}
-                </td>
-              </tr>
-            )}
-            {assetsQuery.data?.items.map((asset) => (
-              <tr
-                key={asset.id}
-                onClick={() => navigate(`/assets/${asset.id}`)}
-                className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/50"
-              >
-                <td className="px-3 py-2">
-                  <Link to={`/assets/${asset.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
-                    {asset.name}
-                  </Link>
-                  {!asset.enabled && <span className="ml-1 text-xs text-muted-foreground">(desabilitado)</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <StatusBadge status={asset.status} className="text-xs" />
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">{asset.site_name}</td>
-                <td className="px-3 py-2 font-mono text-xs">{asset.last_rtt_ms != null ? `${asset.last_rtt_ms} ms` : "—"}</td>
-                <td className="px-3 py-2 font-mono text-xs">{asset.packet_loss != null ? `${asset.packet_loss}%` : "—"}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {asset.last_check_at ? new Date(asset.last_check_at).toLocaleString("pt-BR") : "Nunca"}
-                </td>
-                <td className="px-3 py-2 font-mono text-xs">{asset.ip_address ?? asset.hostname}</td>
-                {canManage && (
-                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => startEdit(asset)}>
-                        Editar
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleToggleEnabled(asset)}>
-                        {asset.enabled ? "Desativar" : "Ativar"}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(asset)}>
-                        Excluir
-                      </Button>
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {total > 0 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Mostrando {from}–{to} de {total}
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-              Anterior
-            </Button>
-            <Button variant="outline" size="sm" disabled={to >= total} onClick={() => setPage((p) => p + 1)}>
-              Próxima
-            </Button>
-          </div>
+      {assetsQuery.isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
         </div>
+      ) : assetsQuery.isError ? (
+        <p className="text-sm text-destructive">Não foi possível carregar os ativos.</p>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={Server}
+          title="Nenhum ativo encontrado."
+          description={hasNoSites ? "Crie um site antes de cadastrar ativos." : "Ajuste os filtros ou cadastre um novo ativo."}
+        />
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <tr>
+                {SORTABLE_COLUMNS.map((col) => (
+                  <TableHead key={col.key} className={col.align === "right" ? "text-right" : undefined}>
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.key)}
+                      className={`inline-flex items-center gap-1 hover:text-foreground ${col.align === "right" ? "flex-row-reverse" : ""}`}
+                    >
+                      {col.label}
+                      {sort === col.key && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
+                      {sort === `-${col.key}` && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
+                    </button>
+                  </TableHead>
+                ))}
+                <TableHead>IP / Hostname</TableHead>
+                {canManage && <TableHead>Ações</TableHead>}
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {items.map((asset) => (
+                <TableRow
+                  key={asset.id}
+                  onClick={() => navigate(`/assets/${asset.id}`)}
+                  className="cursor-pointer hover:bg-muted/50"
+                >
+                  <TableCell>
+                    <Link to={`/assets/${asset.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                      {asset.name}
+                    </Link>
+                    {!asset.enabled && <span className="ml-1 text-xs text-muted-foreground">(desabilitado)</span>}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={asset.status} className="text-xs" />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{asset.site_name}</TableCell>
+                  <TableCell className="text-right font-mono text-xs">
+                    {asset.last_rtt_ms != null ? `${asset.last_rtt_ms} ms` : "—"}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs">
+                    {asset.packet_loss != null ? `${asset.packet_loss}%` : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {asset.last_check_at ? new Date(asset.last_check_at).toLocaleString("pt-BR") : "Nunca"}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{asset.ip_address ?? asset.hostname}</TableCell>
+                  {canManage && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => startEdit(asset)}>
+                          Editar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleToggleEnabled(asset)}>
+                          {asset.enabled ? "Desativar" : "Ativar"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleDelete(asset)}>
+                          Excluir
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {total > 0 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Mostrando {from}–{to} de {total}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+                  Anterior
+                </Button>
+                <Button variant="outline" size="sm" disabled={to >= total} onClick={() => setPage((p) => p + 1)}>
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

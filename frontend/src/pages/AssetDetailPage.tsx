@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ImageOff } from "lucide-react";
 import {
   forwardRef,
   useImperativeHandle,
@@ -10,14 +11,16 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AssetForm, type AssetFormValues } from "@/components/AssetForm";
-import { StatusBadge } from "@/components/StatusBadge";
+import { EmptyState } from "@/components/EmptyState";
+import { StatusBadge, StatusPill } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { AssetOut, AssetPhotoOut, CheckOut, CheckResultOut, SiteOut } from "@/lib/types";
-
-const fieldClass =
-  "rounded-md border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -116,14 +119,15 @@ export function AssetDetailPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <Link to="/assets" className="text-sm text-muted-foreground hover:underline">
-        ← Ativos
+      <Link to="/assets" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        Ativos
       </Link>
 
-      <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">{asset.name}</h1>
-          <StatusBadge status={asset.status} className="text-sm" />
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">{asset.name}</h1>
+          <StatusPill status={asset.status} />
         </div>
         <p className="font-mono text-sm text-muted-foreground">
           {asset.ip_address ?? asset.hostname} · {asset.site_name}
@@ -195,19 +199,25 @@ export function AssetDetailPage() {
 
       <div className="space-y-3 border-t border-border pt-4">
         <h2 className="text-sm font-medium">Status atual</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-muted-foreground">RTT</div>
-            <div className="font-mono">{asset.last_rtt_ms != null ? `${asset.last_rtt_ms} ms` : "—"}</div>
+            <div className="text-sm text-muted-foreground">RTT</div>
+            <div className="font-mono text-2xl tracking-tight">
+              {asset.last_rtt_ms != null ? asset.last_rtt_ms : "—"}
+              {asset.last_rtt_ms != null && <span className="ml-1 text-sm text-muted-foreground">ms</span>}
+            </div>
           </div>
           <div>
-            <div className="text-muted-foreground">Packet loss</div>
-            <div className="font-mono">{asset.packet_loss != null ? `${asset.packet_loss}%` : "—"}</div>
+            <div className="text-sm text-muted-foreground">Packet loss</div>
+            <div className="font-mono text-2xl tracking-tight">
+              {asset.packet_loss != null ? asset.packet_loss : "—"}
+              {asset.packet_loss != null && <span className="ml-1 text-sm text-muted-foreground">%</span>}
+            </div>
           </div>
         </div>
         <div className="text-sm">
           {asset.status === "up" ? (
-            <div>Online</div>
+            <div className="text-muted-foreground">Online</div>
           ) : asset.status === "warning" || asset.status === "down" ? (
             <>
               <div className="text-muted-foreground">Última vez online</div>
@@ -258,39 +268,41 @@ function HistorySection({ assetId }: { assetId: string }) {
     <div className="space-y-3 border-t border-border pt-4">
       <h2 className="text-sm font-medium">Histórico de monitoramento</h2>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-      {isError && <p className="text-sm text-destructive">Não foi possível carregar o histórico.</p>}
-      {!isError && data?.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhuma checagem registrada ainda.</p>
+      {isLoading && (
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
       )}
+      {isError && <p className="text-sm text-destructive">Não foi possível carregar o histórico.</p>}
+      {!isError && data?.length === 0 && <EmptyState title="Nenhuma checagem registrada ainda." />}
 
       {data && data.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">RTT</th>
-                <th className="px-3 py-2 font-medium">Perda</th>
-                <th className="px-3 py-2 font-medium">Mensagem</th>
-                <th className="px-3 py-2 font-medium">Quando</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((entry) => (
-                <tr key={entry.id} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2">
-                    <StatusBadge status={entry.status} />
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs">{entry.latency_ms != null ? `${entry.latency_ms} ms` : "—"}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{entry.packet_loss != null ? `${entry.packet_loss}%` : "—"}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{entry.message ?? "—"}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{relativeTime(entry.checked_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <tr>
+              <TableHead>Status</TableHead>
+              <TableHead>RTT</TableHead>
+              <TableHead>Perda</TableHead>
+              <TableHead>Mensagem</TableHead>
+              <TableHead>Quando</TableHead>
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {data.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell>
+                  <StatusBadge status={entry.status} />
+                </TableCell>
+                <TableCell className="font-mono text-xs">{entry.latency_ms != null ? `${entry.latency_ms} ms` : "—"}</TableCell>
+                <TableCell className="font-mono text-xs">{entry.packet_loss != null ? `${entry.packet_loss}%` : "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{entry.message ?? "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{relativeTime(entry.checked_at)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );
@@ -388,9 +400,7 @@ const PhotosSection = forwardRef<PhotosSectionHandle, { assetId: string; canMana
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {photosQuery.isError && <p className="text-sm text-destructive">Não foi possível carregar as fotos.</p>}
-      {!photosQuery.isError && photos.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhuma foto ainda.</p>
-      )}
+      {!photosQuery.isError && photos.length === 0 && <EmptyState icon={ImageOff} title="Nenhuma foto ainda." />}
 
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
@@ -400,7 +410,7 @@ const PhotosSection = forwardRef<PhotosSectionHandle, { assetId: string; canMana
                 <img
                   src={photo.thumbnail_url}
                   alt={photo.caption ?? photo.filename}
-                  className={`aspect-square w-full rounded-md border object-cover ${
+                  className={`aspect-square w-full rounded-lg border object-cover transition-opacity hover:opacity-90 ${
                     photo.is_primary ? "border-primary" : "border-border"
                   }`}
                 />
@@ -550,12 +560,11 @@ function BackupSection({
 
       {editingText ? (
         <form onSubmit={handleSaveText} className="space-y-2">
-          <textarea
+          <Textarea
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}
             rows={4}
             placeholder="Local do backup, procedimento de restauração, retenção..."
-            className={`${fieldClass} w-full resize-y`}
           />
           {textError && <p className="text-sm text-destructive">{textError}</p>}
           <div className="flex gap-2">
@@ -594,9 +603,7 @@ function BackupSection({
 
       {photoError && <p className="text-sm text-destructive">{photoError}</p>}
       {photosQuery.isError && <p className="text-sm text-destructive">Não foi possível carregar as fotos.</p>}
-      {!photosQuery.isError && photos.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhuma foto de backup ainda.</p>
-      )}
+      {!photosQuery.isError && photos.length === 0 && <EmptyState icon={ImageOff} title="Nenhuma foto de backup ainda." />}
 
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
@@ -606,7 +613,7 @@ function BackupSection({
                 <img
                   src={photo.thumbnail_url}
                   alt={photo.caption ?? photo.filename}
-                  className="aspect-square w-full rounded-md border border-border object-cover"
+                  className="aspect-square w-full rounded-lg border border-border object-cover transition-opacity hover:opacity-90"
                 />
               </button>
               {photo.caption && <div className="truncate text-xs text-muted-foreground">{photo.caption}</div>}
@@ -756,42 +763,39 @@ const MonitoringSection = forwardRef<MonitoringSectionHandle, { assetId: string;
               <label htmlFor="check-interval" className="text-sm">
                 Intervalo (s)
               </label>
-              <input
+              <Input
                 id="check-interval"
                 type="number"
                 min={10}
                 max={3600}
                 value={intervalSeconds}
                 onChange={(e) => setIntervalSeconds(Number(e.target.value))}
-                className={`${fieldClass} w-full`}
               />
             </div>
             <div className="space-y-1">
               <label htmlFor="check-timeout" className="text-sm">
                 Timeout (s)
               </label>
-              <input
+              <Input
                 id="check-timeout"
                 type="number"
                 min={1}
                 max={60}
                 value={timeoutSeconds}
                 onChange={(e) => setTimeoutSeconds(Number(e.target.value))}
-                className={`${fieldClass} w-full`}
               />
             </div>
             <div className="space-y-1">
               <label htmlFor="check-packets" className="text-sm">
                 Pacotes
               </label>
-              <input
+              <Input
                 id="check-packets"
                 type="number"
                 min={1}
                 max={10}
                 value={packets}
                 onChange={(e) => setPackets(Number(e.target.value))}
-                className={`${fieldClass} w-full`}
               />
             </div>
           </div>

@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Building2, LayoutDashboard } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { EmptyState } from "@/components/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge, StatusShape } from "@/components/StatusBadge";
 import { apiFetch } from "@/lib/api";
 import type { AssetStatus } from "@/lib/types";
@@ -52,6 +55,43 @@ function relativeTime(iso: string): string {
   return `há ${Math.floor(hours / 24)}d`;
 }
 
+const STATUS_ORDER: AssetStatus[] = ["up", "warning", "down", "unknown"];
+const STATUS_VAR: Record<AssetStatus, string> = {
+  up: "var(--status-up)",
+  warning: "var(--status-warning)",
+  down: "var(--status-down)",
+  unknown: "var(--status-unknown)",
+};
+
+/** Barra segmentada proporcional ao estado da frota — a resposta visual mais rápida para "como estamos agora". */
+function StatusDistributionBar({ totals, className = "" }: { totals: DashboardTotals; className?: string }) {
+  const denominator = totals.total || 1;
+  return (
+    <div
+      className={`flex h-1.5 w-full overflow-hidden rounded-full bg-muted ${className}`}
+      role="img"
+      aria-label="Distribuição de status dos ativos"
+    >
+      {STATUS_ORDER.filter((key) => totals[key] > 0).map((key) => (
+        <div key={key} style={{ width: `${(totals[key] / denominator) * 100}%`, backgroundColor: STATUS_VAR[key] }} />
+      ))}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-28 rounded-md" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <Skeleton className="h-48 rounded-md lg:col-span-3" />
+        <Skeleton className="h-48 rounded-md lg:col-span-2" />
+      </div>
+      <Skeleton className="h-32 rounded-md" />
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard"],
@@ -59,62 +99,69 @@ export function DashboardPage() {
     refetchInterval: 20000,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando...</p>;
+  if (isLoading) return <DashboardSkeleton />;
   if (isError || !data) return <p className="text-sm text-destructive">Não foi possível carregar a visão geral.</p>;
 
   const { totals, sites, problems, recent_activity: activity } = data;
 
   if (totals.total === 0) {
     return (
-      <div className="max-w-md space-y-2">
-        <h1 className="text-lg font-semibold">Visão geral</h1>
-        <p className="text-sm text-muted-foreground">
-          Nenhum ativo cadastrado ainda.{" "}
-          <Link to="/assets" className="underline underline-offset-2">
-            Cadastre o primeiro ativo
-          </Link>{" "}
-          para começar a monitorar.
-        </p>
-      </div>
+      <EmptyState
+        icon={LayoutDashboard}
+        title="Nenhum ativo cadastrado ainda"
+        description="Cadastre o primeiro ativo para começar a monitorar sua infraestrutura."
+        action={
+          <Link to="/assets" className="text-sm text-primary underline underline-offset-2">
+            Ir para Ativos
+          </Link>
+        }
+        className="mt-6"
+      />
     );
   }
 
   return (
     <div className="space-y-6">
-      <section className="rounded-md border border-border p-6">
+      <section className="rounded-md border border-border border-l-[3px] border-l-primary bg-card p-6">
         <p className="text-sm text-muted-foreground">Estado geral</p>
-        <p className="mt-1 flex items-baseline gap-2">
-          <span className="text-4xl font-semibold tracking-tight">{totals.total}</span>
-          <span className="text-muted-foreground">ativos monitorados</span>
-        </p>
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
-          <span className="inline-flex items-center gap-1.5">
-            <StatusShape status="up" size={9} />
-            <span className="font-mono">{totals.up}</span> online
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <StatusShape status="warning" size={9} />
-            <span className="font-mono">{totals.warning}</span> em alerta
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <StatusShape status="down" size={9} />
-            <span className="font-mono">{totals.down}</span> offline
-          </span>
-          {totals.unknown > 0 && (
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
+          <p className="flex items-baseline gap-2">
+            <span className="text-4xl font-semibold tracking-tight">{totals.total}</span>
+            <span className="text-muted-foreground">ativos monitorados</span>
+          </p>
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
             <span className="inline-flex items-center gap-1.5">
-              <StatusShape status="unknown" size={9} />
-              <span className="font-mono">{totals.unknown}</span> sem checagem ainda
+              <StatusShape status="up" size={9} />
+              <span className="font-mono">{totals.up}</span> online
             </span>
-          )}
+            <span className="inline-flex items-center gap-1.5">
+              <StatusShape status="warning" size={9} />
+              <span className="font-mono">{totals.warning}</span> em alerta
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <StatusShape status="down" size={9} />
+              <span className="font-mono">{totals.down}</span> offline
+            </span>
+            {totals.unknown > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <StatusShape status="unknown" size={9} />
+                <span className="font-mono">{totals.unknown}</span> sem checagem ainda
+              </span>
+            )}
+          </div>
         </div>
+        <StatusDistributionBar totals={totals} className="mt-4" />
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <section className="lg:col-span-3">
           <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-medium">Problemas atuais</h2>
+            <h2 className="flex items-center gap-1.5 text-sm font-medium">
+              <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              Problemas atuais
+            </h2>
             {problems.length > 0 && (
-              <Link to="/problems" className="text-xs text-muted-foreground hover:underline">
+              <Link to="/problems" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
                 Ver todos
               </Link>
             )}
@@ -146,14 +193,30 @@ export function DashboardPage() {
         </section>
 
         <section className="lg:col-span-2">
-          <h2 className="mb-2 text-sm font-medium">Sites</h2>
+          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+            <Building2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            Sites
+          </h2>
           <div className="divide-y divide-border rounded-md border border-border">
             {sites.map((site) => (
-              <div key={site.site_id} className="flex items-center justify-between px-3 py-2 text-sm">
-                <span>{site.site_name}</span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {site.up_percentage != null ? `${site.up_percentage}%` : `${site.total_assets} ativos`}
-                </span>
+              <div key={site.site_id} className="space-y-1.5 px-3 py-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>{site.site_name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {site.up_percentage != null ? `${site.up_percentage}%` : `${site.total_assets} ativos`}
+                  </span>
+                </div>
+                {site.up_percentage != null && (
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${site.up_percentage}%`,
+                        backgroundColor: site.up_percentage >= 99 ? "var(--status-up)" : "var(--status-warning)",
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>

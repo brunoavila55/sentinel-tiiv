@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { AuthShell } from "@/components/AuthShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -28,40 +30,31 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-md border border-border p-6">
+    <AuthShell>
+      <form onSubmit={handleSubmit} className="w-full space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
         <div>
-          <h1 className="text-lg font-semibold">Sentinel</h1>
-          <p className="text-sm text-muted-foreground">Entre com sua conta.</p>
+          <h1 className="text-lg font-semibold">Entrar</h1>
+          <p className="text-sm text-muted-foreground">Acesse o monitoramento da sua organização.</p>
         </div>
 
         <div className="space-y-1">
           <label htmlFor="email" className="text-sm font-medium">
             Email
           </label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-          />
+          <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
         <div className="space-y-1">
           <label htmlFor="password" className="text-sm font-medium">
             Senha
           </label>
-          <input
+          <Input
             id="password"
             type="password"
             required
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
@@ -73,11 +66,11 @@ export function LoginPage() {
 
         <p className="text-center text-sm text-muted-foreground">
           Não tem conta?{" "}
-          <Link to="/register" className="underline underline-offset-2">
+          <Link to="/register" className="text-foreground underline underline-offset-2">
             Criar organização
           </Link>
         </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }

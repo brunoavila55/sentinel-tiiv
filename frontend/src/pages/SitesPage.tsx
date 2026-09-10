@@ -1,13 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { SiteOut } from "@/lib/types";
-
-const fieldClass =
-  "w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 interface SiteFormState {
   name: string;
@@ -24,6 +28,7 @@ export function SitesPage() {
 
   const [search, setSearch] = useState("");
   const [editingSite, setEditingSite] = useState<SiteOut | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<SiteFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,16 +46,25 @@ export function SitesPage() {
     await queryClient.invalidateQueries({ queryKey: ["sites", currentOrganizationId] });
   }
 
+  function startCreate() {
+    setEditingSite(null);
+    setForm(emptyForm);
+    setError(null);
+    setShowForm(true);
+  }
+
   function startEdit(site: SiteOut) {
     setEditingSite(site);
     setForm({ name: site.name, description: site.description ?? "", address: site.address ?? "" });
     setError(null);
+    setShowForm(true);
   }
 
   function cancelEdit() {
     setEditingSite(null);
     setForm(emptyForm);
     setError(null);
+    setShowForm(false);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -90,17 +104,19 @@ export function SitesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold">Sites</h1>
-        <input
-          placeholder="Buscar por nome"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className={`${fieldClass} w-64`}
-        />
+        <div className="flex items-center gap-2">
+          <SearchInput placeholder="Buscar por nome" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
+          {canManage && !showForm && (
+            <Button size="sm" onClick={startCreate}>
+              Novo site
+            </Button>
+          )}
+        </div>
       </div>
 
-      {canManage && (
+      {canManage && showForm && (
         <form onSubmit={handleSubmit} className="max-w-md space-y-3 rounded-md border border-border p-4">
           <h2 className="text-sm font-medium">{editingSite ? `Editar ${editingSite.name}` : "Novo site"}</h2>
 
@@ -108,36 +124,24 @@ export function SitesPage() {
             <label htmlFor="site-name" className="text-sm">
               Nome
             </label>
-            <input
-              id="site-name"
-              required
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className={fieldClass}
-            />
+            <Input id="site-name" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </div>
 
           <div className="space-y-1">
             <label htmlFor="site-address" className="text-sm">
               Endereço
             </label>
-            <input
-              id="site-address"
-              value={form.address}
-              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-              className={fieldClass}
-            />
+            <Input id="site-address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
           </div>
 
           <div className="space-y-1">
             <label htmlFor="site-description" className="text-sm">
               Descrição
             </label>
-            <textarea
+            <Textarea
               id="site-description"
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              className={fieldClass}
               rows={2}
             />
           </div>
@@ -148,57 +152,50 @@ export function SitesPage() {
             <Button type="submit" disabled={saving} size="sm">
               {saving ? "Salvando..." : editingSite ? "Salvar" : "Criar site"}
             </Button>
-            {editingSite && (
-              <Button type="button" variant="outline" size="sm" onClick={cancelEdit}>
-                Cancelar
-              </Button>
-            )}
+            <Button type="button" variant="outline" size="sm" onClick={cancelEdit}>
+              Cancelar
+            </Button>
           </div>
         </form>
       )}
 
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border text-left text-muted-foreground">
+      {!showForm && error && <p className="text-sm text-destructive">{error}</p>}
+
+      {sitesQuery.isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </div>
+      ) : sitesQuery.isError ? (
+        <p className="text-sm text-destructive">Não foi possível carregar os sites.</p>
+      ) : sitesQuery.data?.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          title="Nenhum site cadastrado."
+          description={canManage ? "Crie o primeiro site para começar." : undefined}
+        />
+      ) : (
+        <Table>
+          <TableHeader>
             <tr>
-              <th className="px-3 py-2 font-medium">Nome</th>
-              <th className="px-3 py-2 font-medium">Endereço</th>
-              <th className="px-3 py-2 font-medium">Ativos</th>
-              {canManage && <th className="px-3 py-2 font-medium">Ações</th>}
+              <TableHead>Nome</TableHead>
+              <TableHead>Endereço</TableHead>
+              <TableHead>Ativos</TableHead>
+              {canManage && <TableHead>Ações</TableHead>}
             </tr>
-          </thead>
-          <tbody>
-            {sitesQuery.isLoading && (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-muted-foreground">
-                  Carregando...
-                </td>
-              </tr>
-            )}
-            {sitesQuery.isError && (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-destructive">
-                  Não foi possível carregar os sites.
-                </td>
-              </tr>
-            )}
-            {sitesQuery.data?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-muted-foreground">
-                  Nenhum site cadastrado. {canManage && "Crie o primeiro site para começar."}
-                </td>
-              </tr>
-            )}
+          </TableHeader>
+          <TableBody>
             {sitesQuery.data?.map((site) => (
-              <tr key={site.id} className="border-b border-border last:border-0">
-                <td className="px-3 py-2">
+              <TableRow key={site.id}>
+                <TableCell>
                   <div>{site.name}</div>
                   {site.description && <div className="text-xs text-muted-foreground">{site.description}</div>}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">{site.address ?? "—"}</td>
-                <td className="px-3 py-2 font-mono">{site.asset_count}</td>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{site.address ?? "—"}</TableCell>
+                <TableCell className="font-mono">{site.asset_count}</TableCell>
                 {canManage && (
-                  <td className="px-3 py-2">
+                  <TableCell>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => startEdit(site)}>
                         Editar
@@ -207,13 +204,13 @@ export function SitesPage() {
                         Excluir
                       </Button>
                     </div>
-                  </td>
+                  </TableCell>
                 )}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }

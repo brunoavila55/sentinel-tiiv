@@ -1,7 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { ROLE_LABELS, type InviteOut, type MemberOut, type OrganizationRole } from "@/lib/types";
@@ -13,9 +20,6 @@ function canManageTargetRole(actorRole: OrganizationRole, targetRole: Organizati
   if (actorRole === "admin") return targetRole !== "owner";
   return false;
 }
-
-const fieldClass =
-  "rounded-md border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 export function MembersPage() {
   const { currentOrganizationId, currentMembership, user } = useAuth();
@@ -72,104 +76,82 @@ export function MembersPage() {
       <section className="space-y-4">
         <h1 className="text-lg font-semibold">Usuários</h1>
 
-        <div className="flex gap-2">
-          <input
-            placeholder="Buscar por nome ou email"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={`${fieldClass} w-64`}
-          />
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value as OrganizationRole | "")}
-            className={fieldClass}
-          >
+        <div className="flex flex-wrap gap-2">
+          <SearchInput placeholder="Buscar por nome ou email" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
+          <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as OrganizationRole | "")} className="w-44">
             <option value="">Todas as roles</option>
             {ROLE_OPTIONS.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-muted-foreground">
+        {membersQuery.isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+        ) : membersQuery.isError ? (
+          <p className="text-sm text-destructive">Não foi possível carregar os usuários.</p>
+        ) : membersQuery.data?.length === 0 ? (
+          <EmptyState icon={Users} title="Nenhum usuário encontrado." />
+        ) : (
+          <Table>
+            <TableHeader>
               <tr>
-                <th className="px-3 py-2 font-medium">Nome</th>
-                <th className="px-3 py-2 font-medium">Email</th>
-                <th className="px-3 py-2 font-medium">Role</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Ações</th>
+                <TableHead>Nome</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ações</TableHead>
               </tr>
-            </thead>
-            <tbody>
-              {membersQuery.isLoading && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-4 text-muted-foreground">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {membersQuery.isError && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-4 text-destructive">
-                    Não foi possível carregar os usuários.
-                  </td>
-                </tr>
-              )}
-              {membersQuery.data?.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-4 text-muted-foreground">
-                    Nenhum usuário encontrado.
-                  </td>
-                </tr>
-              )}
+            </TableHeader>
+            <TableBody>
               {membersQuery.data?.map((member) => {
                 const canManageThis = canManageUsers && canManageTargetRole(actorRole, member.role);
                 return (
-                  <tr key={member.user_id} className="border-b border-border last:border-0">
-                    <td className="px-3 py-2">
+                  <TableRow key={member.user_id}>
+                    <TableCell>
                       {member.name}
-                      {member.user_id === user?.id && (
-                        <span className="ml-1 text-xs text-muted-foreground">(você)</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">{member.email}</td>
-                    <td className="px-3 py-2">
+                      {member.user_id === user?.id && <span className="ml-1 text-xs text-muted-foreground">(você)</span>}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{member.email}</TableCell>
+                    <TableCell>
                       {canManageThis ? (
-                        <select
+                        <Select
                           value={member.role}
                           onChange={(e) => handleRoleChange(member.user_id, e.target.value as OrganizationRole)}
-                          className={fieldClass}
+                          className="w-36"
                         >
                           {ROLE_OPTIONS.map((r) => (
                             <option key={r} value={r} disabled={!canManageTargetRole(actorRole, r)}>
                               {ROLE_LABELS[r]}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       ) : (
                         ROLE_LABELS[member.role]
                       )}
-                    </td>
-                    <td className="px-3 py-2">{member.status === "active" ? "Ativo" : "Desabilitado"}</td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell>{member.status === "active" ? "Ativo" : "Desabilitado"}</TableCell>
+                    <TableCell>
                       {canManageThis && (
                         <Button variant="outline" size="sm" onClick={() => handleRemove(member.user_id)}>
                           Remover
                         </Button>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        )}
       </section>
 
       {canManageUsers && <InvitesSection organizationId={currentOrganizationId} actorRole={actorRole} />}
@@ -229,31 +211,19 @@ function InvitesSection({ organizationId, actorRole }: { organizationId: string 
           <label htmlFor="invite-email" className="text-sm font-medium">
             Email
           </label>
-          <input
-            id="invite-email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={`${fieldClass} w-64`}
-          />
+          <Input id="invite-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-64" />
         </div>
         <div className="space-y-1">
           <label htmlFor="invite-role" className="text-sm font-medium">
             Role
           </label>
-          <select
-            id="invite-role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as OrganizationRole)}
-            className={fieldClass}
-          >
+          <Select id="invite-role" value={role} onChange={(e) => setRole(e.target.value as OrganizationRole)} className="w-40">
             {ROLE_OPTIONS.map((r) => (
               <option key={r} value={r} disabled={!canManageTargetRole(actorRole, r)}>
                 {ROLE_LABELS[r]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <Button type="submit" disabled={creating}>
           {creating ? "Enviando..." : "Convidar"}
@@ -269,55 +239,40 @@ function InvitesSection({ organizationId, actorRole }: { organizationId: string 
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border text-left text-muted-foreground">
+      {invitesQuery.isLoading ? (
+        <Skeleton className="h-9 w-full" />
+      ) : invitesQuery.isError ? (
+        <p className="text-sm text-destructive">Não foi possível carregar os convites.</p>
+      ) : invitesQuery.data?.length === 0 ? (
+        <EmptyState title="Nenhum convite pendente." />
+      ) : (
+        <Table>
+          <TableHeader>
             <tr>
-              <th className="px-3 py-2 font-medium">Email</th>
-              <th className="px-3 py-2 font-medium">Role</th>
-              <th className="px-3 py-2 font-medium">Expira em</th>
-              <th className="px-3 py-2 font-medium">Ações</th>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Expira em</TableHead>
+              <TableHead>Ações</TableHead>
             </tr>
-          </thead>
-          <tbody>
-            {invitesQuery.isLoading && (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-muted-foreground">
-                  Carregando...
-                </td>
-              </tr>
-            )}
-            {invitesQuery.isError && (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-destructive">
-                  Não foi possível carregar os convites.
-                </td>
-              </tr>
-            )}
-            {invitesQuery.data?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-4 text-muted-foreground">
-                  Nenhum convite pendente.
-                </td>
-              </tr>
-            )}
+          </TableHeader>
+          <TableBody>
             {invitesQuery.data?.map((invite) => (
-              <tr key={invite.id} className="border-b border-border last:border-0">
-                <td className="px-3 py-2 font-mono text-xs">{invite.email}</td>
-                <td className="px-3 py-2">{ROLE_LABELS[invite.role]}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
+              <TableRow key={invite.id}>
+                <TableCell className="font-mono text-xs">{invite.email}</TableCell>
+                <TableCell>{ROLE_LABELS[invite.role]}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
                   {new Date(invite.expires_at).toLocaleDateString("pt-BR")}
-                </td>
-                <td className="px-3 py-2">
+                </TableCell>
+                <TableCell>
                   <Button variant="outline" size="sm" onClick={() => handleRevoke(invite.id)}>
                     Revogar
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      )}
     </section>
   );
 }

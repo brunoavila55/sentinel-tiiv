@@ -14,18 +14,19 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import { EmptyState } from "@/components/EmptyState";
 import { AssetInspector } from "@/components/topology/AssetInspector";
 import { AssetNode, type AssetNodeData } from "@/components/topology/AssetNode";
 import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { layoutWithDagre, NODE_HEIGHT, NODE_WIDTH, type LayoutDirection } from "@/lib/dagre-layout";
 import type { SiteOut, TopologyResponse } from "@/lib/types";
 
 const nodeTypes = { asset: AssetNode };
-
-const fieldClass =
-  "rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 export function TopologyPage() {
   const [siteId, setSiteId] = useState<string>("");
@@ -42,7 +43,12 @@ export function TopologyPage() {
   }, [siteId, sitesQuery.data]);
 
   if (sitesQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Carregando...</p>;
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-[calc(100vh-11rem)] w-full" />
+      </div>
+    );
   }
 
   if (sitesQuery.isError) {
@@ -53,9 +59,7 @@ export function TopologyPage() {
     return (
       <div className="max-w-md space-y-2">
         <h1 className="text-lg font-semibold">Topologia</h1>
-        <p className="text-sm text-muted-foreground">
-          Nenhum site cadastrado ainda. Crie um site para visualizar a topologia.
-        </p>
+        <EmptyState title="Nenhum site cadastrado ainda." description="Crie um site para visualizar a topologia." />
       </div>
     );
   }
@@ -64,13 +68,13 @@ export function TopologyPage() {
     <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Topologia</h1>
-        <select value={siteId} onChange={(e) => setSiteId(e.target.value)} className={fieldClass} aria-label="Site">
+        <Select value={siteId} onChange={(e) => setSiteId(e.target.value)} aria-label="Site" className="w-44">
           {sitesQuery.data?.map((site) => (
             <option key={site.id} value={site.id}>
               {site.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {siteId && (
@@ -184,13 +188,8 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
       className={`flex flex-1 overflow-hidden rounded-md border ${editMode ? "border-primary" : "border-border"}`}
     >
       <div className="relative flex-1">
-        <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2">
-          <input
-            placeholder="Buscar ativo..."
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            className={`${fieldClass} w-48`}
-          />
+        <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-2">
+          <SearchInput placeholder="Buscar ativo..." value={search} onChange={(e) => handleSearch(e.target.value)} className="w-48" />
           <Button variant="outline" size="sm" onClick={() => setDirection((d) => (d === "TB" ? "LR" : "TB"))}>
             {direction === "TB" ? "Vertical" : "Horizontal"}
           </Button>
@@ -229,8 +228,8 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
         )}
 
         {topologyQuery.isLoading && (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Carregando topologia...
+          <div className="flex h-full items-center justify-center">
+            <Skeleton className="h-3/4 w-3/4" />
           </div>
         )}
 
@@ -241,8 +240,8 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
         )}
 
         {topologyQuery.data && topologyQuery.data.nodes.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Nenhum ativo neste site ainda.
+          <div className="flex h-full items-center justify-center">
+            <EmptyState title="Nenhum ativo neste site ainda." />
           </div>
         )}
 

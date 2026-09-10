@@ -2,6 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import type { AssetListResponse, SiteOut } from "@/lib/types";
 
@@ -24,9 +27,6 @@ export const emptyAssetForm: AssetFormValues = {
   enabled: true,
   parent_asset_id: "",
 };
-
-const fieldClass =
-  "rounded-md border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 export function AssetForm({
   title,
@@ -81,24 +81,18 @@ export function AssetForm({
           <label htmlFor="asset-name" className="text-sm">
             Nome
           </label>
-          <input
-            id="asset-name"
-            required
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            className={`${fieldClass} w-full`}
-          />
+          <Input id="asset-name" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </div>
         <div className="space-y-1">
           <label htmlFor="asset-site" className="text-sm">
             Site
           </label>
-          <select
+          <Select
             id="asset-site"
             required
             value={form.site_id}
             onChange={(e) => setForm((f) => ({ ...f, site_id: e.target.value, parent_asset_id: "" }))}
-            className={`${fieldClass} w-full`}
+            className="w-full"
           >
             <option value="" disabled>
               Selecione
@@ -108,17 +102,17 @@ export function AssetForm({
                 {site.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="space-y-1">
           <label htmlFor="asset-parent" className="text-sm">
             Ativo pai
           </label>
-          <select
+          <Select
             id="asset-parent"
             value={form.parent_asset_id}
             onChange={(e) => setForm((f) => ({ ...f, parent_asset_id: e.target.value }))}
-            className={`${fieldClass} w-full`}
+            className="w-full"
             disabled={!form.site_id}
           >
             <option value="">Nenhum (raiz da topologia)</option>
@@ -127,29 +121,19 @@ export function AssetForm({
                 {asset.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="space-y-1">
           <label htmlFor="asset-hostname" className="text-sm">
             Hostname
           </label>
-          <input
-            id="asset-hostname"
-            value={form.hostname}
-            onChange={(e) => setForm((f) => ({ ...f, hostname: e.target.value }))}
-            className={`${fieldClass} w-full`}
-          />
+          <Input id="asset-hostname" value={form.hostname} onChange={(e) => setForm((f) => ({ ...f, hostname: e.target.value }))} />
         </div>
         <div className="space-y-1">
           <label htmlFor="asset-ip" className="text-sm">
             Endereço IP
           </label>
-          <input
-            id="asset-ip"
-            value={form.ip_address}
-            onChange={(e) => setForm((f) => ({ ...f, ip_address: e.target.value }))}
-            className={`${fieldClass} w-full`}
-          />
+          <Input id="asset-ip" value={form.ip_address} onChange={(e) => setForm((f) => ({ ...f, ip_address: e.target.value }))} />
         </div>
       </div>
       <p className="text-xs text-muted-foreground">Informe pelo menos um: hostname ou IP.</p>
@@ -158,12 +142,11 @@ export function AssetForm({
         <label htmlFor="asset-description" className="text-sm">
           Descrição
         </label>
-        <textarea
+        <Textarea
           id="asset-description"
           rows={2}
           value={form.description}
           onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-          className={`${fieldClass} w-full`}
         />
       </div>
 

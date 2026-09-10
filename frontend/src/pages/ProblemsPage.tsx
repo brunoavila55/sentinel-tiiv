@@ -1,13 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
+import { CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiFetch } from "@/lib/api";
 import { STATUS_LABELS, type AssetStatus, type ProblemOut, type SiteOut } from "@/lib/types";
-
-const fieldClass =
-  "rounded-md border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring";
 
 const PROBLEM_STATUS_OPTIONS: AssetStatus[] = ["down", "warning"];
 
@@ -46,86 +49,88 @@ export function ProblemsPage() {
     refetchInterval: 15000,
   });
 
+  const hasFilters = Boolean(siteFilter || statusFilter || search);
+
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold">Problemas</h1>
+      <div>
+        <h1 className="text-lg font-semibold">Problemas</h1>
+        <p className="text-sm text-muted-foreground">Ativos em alerta ou offline no momento.</p>
+      </div>
 
       <div className="flex flex-wrap gap-2">
-        <input
+        <SearchInput
           placeholder="Buscar por nome, hostname ou IP"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className={`${fieldClass} w-64`}
+          className="w-64"
         />
-        <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className={fieldClass}>
+        <Select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className="w-40">
           <option value="">Todos os sites</option>
           {sitesQuery.data?.map((site) => (
             <option key={site.id} value={site.id}>
               {site.name}
             </option>
           ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as AssetStatus | "")}
-          className={fieldClass}
-        >
+        </Select>
+        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as AssetStatus | "")} className="w-40">
           <option value="">Down e warning</option>
           {PROBLEM_STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABELS[s]}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-      {isError && <p className="text-sm text-destructive">Não foi possível carregar os problemas.</p>}
-      {data?.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          {siteFilter || statusFilter || search
-            ? "Nenhum problema encontrado com esses filtros."
-            : "Nenhum ativo em warning ou down no momento."}
-        </p>
-      )}
-
-      {data && data.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Ativo</th>
-                <th className="px-3 py-2 font-medium">Site</th>
-                <th className="px-3 py-2 font-medium">IP / Hostname</th>
-                <th className="px-3 py-2 font-medium">Problema</th>
-                <th className="px-3 py-2 font-medium">Desde</th>
-                <th className="px-3 py-2 font-medium">Última checagem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((problem) => (
-                <tr key={problem.asset_id} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2">
-                    <StatusBadge status={problem.status} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <Link to={`/assets/${problem.asset_id}`} className="hover:underline">
-                      {problem.asset_name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">{problem.site_name}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{problem.ip_or_hostname}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{problem.message ?? "—"}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{formatDuration(problem.status_since)}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {problem.last_check_at ? formatDuration(problem.last_check_at) : "Nunca"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
         </div>
+      ) : isError ? (
+        <p className="text-sm text-destructive">Não foi possível carregar os problemas.</p>
+      ) : data?.length === 0 ? (
+        <EmptyState
+          icon={CircleCheck}
+          title={hasFilters ? "Nenhum problema encontrado com esses filtros." : "Nenhum ativo em warning ou down no momento."}
+        />
+      ) : (
+        <Table>
+          <TableHeader>
+            <tr>
+              <TableHead>Status</TableHead>
+              <TableHead>Ativo</TableHead>
+              <TableHead>Site</TableHead>
+              <TableHead>IP / Hostname</TableHead>
+              <TableHead>Problema</TableHead>
+              <TableHead>Desde</TableHead>
+              <TableHead>Última checagem</TableHead>
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {data?.map((problem) => (
+              <TableRow key={problem.asset_id}>
+                <TableCell>
+                  <StatusBadge status={problem.status} />
+                </TableCell>
+                <TableCell>
+                  <Link to={`/assets/${problem.asset_id}`} className="hover:underline">
+                    {problem.asset_name}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{problem.site_name}</TableCell>
+                <TableCell className="font-mono text-xs">{problem.ip_or_hostname}</TableCell>
+                <TableCell className="text-muted-foreground">{problem.message ?? "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{formatDuration(problem.status_since)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {problem.last_check_at ? formatDuration(problem.last_check_at) : "Nunca"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

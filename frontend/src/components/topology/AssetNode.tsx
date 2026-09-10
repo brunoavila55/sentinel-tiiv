@@ -21,8 +21,8 @@ export function AssetNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`flex flex-col items-center gap-1 rounded-md border bg-card px-2 py-1.5 text-center transition-colors ${
-        selected || highlighted ? "border-primary" : "border-border"
+      className={`flex flex-col items-center gap-1 rounded-md border bg-card px-2 py-1.5 text-center transition-all ${
+        selected || highlighted ? "border-primary shadow-sm ring-1 ring-primary/30" : "border-border"
       }`}
       style={{ width: 112 }}
     >

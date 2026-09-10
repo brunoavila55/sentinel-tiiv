@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { History } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiFetch } from "@/lib/api";
 
 interface AuditLogOut {
@@ -33,35 +37,37 @@ export function AuditLogsPage() {
         <p className="text-sm text-muted-foreground">Eventos recentes desta organização.</p>
       </div>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-      {isError && <p className="text-sm text-destructive">Não foi possível carregar os eventos.</p>}
-      {data?.length === 0 && <p className="text-sm text-muted-foreground">Nenhum evento registrado ainda.</p>}
-
-      {data && data.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Quando</th>
-                <th className="px-3 py-2 font-medium">Usuário</th>
-                <th className="px-3 py-2 font-medium">Ação</th>
-                <th className="px-3 py-2 font-medium">Detalhes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((entry) => (
-                <tr key={entry.id} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {new Date(entry.created_at).toLocaleString("pt-BR")}
-                  </td>
-                  <td className="px-3 py-2">{entry.user_name ?? "—"}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{entry.action}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{formatMetadata(entry.metadata)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
         </div>
+      ) : isError ? (
+        <p className="text-sm text-destructive">Não foi possível carregar os eventos.</p>
+      ) : data?.length === 0 ? (
+        <EmptyState icon={History} title="Nenhum evento registrado ainda." />
+      ) : (
+        <Table>
+          <TableHeader>
+            <tr>
+              <TableHead>Quando</TableHead>
+              <TableHead>Usuário</TableHead>
+              <TableHead>Ação</TableHead>
+              <TableHead>Detalhes</TableHead>
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {data?.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell className="text-xs text-muted-foreground">{new Date(entry.created_at).toLocaleString("pt-BR")}</TableCell>
+                <TableCell>{entry.user_name ?? "—"}</TableCell>
+                <TableCell className="font-mono text-xs">{entry.action}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{formatMetadata(entry.metadata)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

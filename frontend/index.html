@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sentinel</title>
+    <script>
+      // Aplica o tema salvo antes do React montar, evitando flash do tema
+      // errado. Claro continua sendo o padrão quando nada foi salvo ainda.
+      (function () {
+        try {
+          if (window.localStorage.getItem("sentinel-theme") === "dark") {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -63,3 +63,21 @@ export function StatusBadge({ status, className = "" }: { status: AssetStatus; c
     </span>
   );
 }
+
+/** Versão com mais peso visual (fundo tonal), para cabeçalhos de página onde o status é a informação central. */
+export function StatusPill({ status, className = "" }: { status: AssetStatus; className?: string }) {
+  const color = STATUS_COLOR[status];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${className}`}
+      style={{
+        color,
+        borderColor: `color-mix(in oklch, ${color}, transparent 65%)`,
+        backgroundColor: `color-mix(in oklch, ${color}, transparent 90%)`,
+      }}
+    >
+      <StatusShape status={status} size={7} />
+      {STATUS_LABELS[status]}
+    </span>
+  );
+}

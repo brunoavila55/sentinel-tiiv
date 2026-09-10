@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { AuthShell } from "@/components/AuthShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -29,12 +31,9 @@ export function RegisterPage() {
     }
   }
 
-  const fieldClass =
-    "w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring";
-
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-md border border-border p-6">
+    <AuthShell>
+      <form onSubmit={handleSubmit} className="w-full space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
         <div>
           <h1 className="text-lg font-semibold">Criar organização</h1>
           <p className="text-sm text-muted-foreground">
@@ -46,19 +45,18 @@ export function RegisterPage() {
           <label htmlFor="name" className="text-sm font-medium">
             Seu nome
           </label>
-          <input id="name" required value={name} onChange={(e) => setName(e.target.value)} className={fieldClass} />
+          <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
         <div className="space-y-1">
           <label htmlFor="organization_name" className="text-sm font-medium">
             Nome da organização
           </label>
-          <input
+          <Input
             id="organization_name"
             required
             value={organizationName}
             onChange={(e) => setOrganizationName(e.target.value)}
-            className={fieldClass}
           />
         </div>
 
@@ -66,22 +64,14 @@ export function RegisterPage() {
           <label htmlFor="email" className="text-sm font-medium">
             Email
           </label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={fieldClass}
-          />
+          <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
         <div className="space-y-1">
           <label htmlFor="password" className="text-sm font-medium">
             Senha
           </label>
-          <input
+          <Input
             id="password"
             type="password"
             required
@@ -89,7 +79,6 @@ export function RegisterPage() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={fieldClass}
           />
           <p className="text-xs text-muted-foreground">Mínimo de 8 caracteres.</p>
         </div>
@@ -102,11 +91,11 @@ export function RegisterPage() {
 
         <p className="text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
-          <Link to="/login" className="underline underline-offset-2">
+          <Link to="/login" className="text-foreground underline underline-offset-2">
             Entrar
           </Link>
         </p>
       </form>
-    </main>
+    </AuthShell>
   );
 }
