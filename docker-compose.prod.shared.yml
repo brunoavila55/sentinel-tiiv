@@ -13,6 +13,8 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      - sentinel_net
     # Sem "ports": só acessível dentro da rede do compose. Nada além do
     # backend/worker precisa falar com o Postgres.
 
@@ -30,6 +32,8 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      - sentinel_net
     # Sem "ports": o Caddy fala com o MinIO pelo nome do serviço na rede
     # interna (reverse_proxy minio:9000). O console (9001) fica fechado —
     # abra com um túnel SSH se precisar dele pontualmente (ver tutorial).
@@ -50,63 +54,13 @@ services:
       mc anonymous set none local/$$MINIO_BUCKET
       "
     restart: "no"
+    networks:
+      - sentinel_net
 
-  backend:
-    build: ./backend
-    environment:
-      APP_ENV: production
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_DOMAIN:?defina MINIO_DOMAIN em .env.production}
-      MINIO_USE_SSL: "false"
-      MINIO_PUBLIC_USE_SSL: "true"
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_BUCKET: ${MINIO_BUCKET:-sentinel-assets}
-      CORS_ORIGINS: https://${DOMAIN}
-      PUBLIC_APP_URL: https://${DOMAIN}
-      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY em .env.production, gerado com python3 -c 'import secrets; print(secrets.token_urlsafe(32))'}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    # Sem bind mount: a imagem já contém o código; sem "ports": só o Caddy
-    # fala com o backend, pelo nome do serviço.
-
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.worker
-    environment:
-      APP_ENV: production
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY em .env.production, gerado com python3 -c 'import secrets; print(secrets.token_urlsafe(32))'}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_RAW
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-    depends_on:
-      - backend
-    restart: unless-stopped
-    # Sem bind mount, sem "ports": build estático (nginx na porta 80
-    # interna), só o Caddy fala com ele.
-
+  # Único componente que fala com o mundo externo (o NPM da VM encaminha
+  # pra cá). Fica no compose "shared" porque a troca de slot blue/green é
+  # feita por ELE — reapontar o upstream e recriar só este container — sem
+  # nunca duplicar Postgres/MinIO. Ver deploy/prod-deploy.sh.
   caddy:
     image: caddy:2-alpine
     volumes:
@@ -116,15 +70,26 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?defina DOMAIN em .env.production}
       MINIO_DOMAIN: ${MINIO_DOMAIN}
+    env_file:
+      # BACKEND_UPSTREAM / FRONTEND_UPSTREAM (ex.: backend-blue:8000). Gerado
+      # e mantido por deploy/prod-deploy.sh — nunca commitado (ver
+      # deploy/active-slot.env.example para o formato). required:false
+      # porque no primeiro `up` do servidor esse arquivo ainda não existe —
+      # o primeiro deploy real (deploy/prod-deploy.sh) que o cria.
+      - path: ./deploy/active-slot.env
+        required: false
+    networks:
+      - sentinel_net
     ports:
       # TLS é terminado pelo Nginx Proxy Manager já existente na VM (usa
       # 80/443 em 177.72.80.11). Este Caddy só escuta HTTP puro numa porta
       # interna, que o NPM encaminha via proxy host.
       - "8300:80"
-    depends_on:
-      - frontend
-      - backend
     restart: unless-stopped
+
+networks:
+  sentinel_net:
+    external: true
 
 volumes:
   postgres_data:

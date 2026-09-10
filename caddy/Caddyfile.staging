@@ -1,0 +1,33 @@
+{
+	auto_https off
+}
+
+# Mesmo modelo do Caddyfile.prod, mas staging é stack única (sem
+# blue/green) — o upstream é sempre o mesmo container, não precisa de
+# variável de slot.
+http://{$DOMAIN} {
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /health {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+http://{$MINIO_DOMAIN} {
+	reverse_proxy minio:9000
+}

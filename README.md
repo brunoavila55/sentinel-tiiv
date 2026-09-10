@@ -1045,6 +1045,97 @@ Verificado e já adequado, sem necessidade de mudança:
 Build de produção (`npm run build`, `tsc -b && vite build`) sem erros de
 tipo e suíte de frontend (10 testes) passando após as mudanças.
 
+## CI/CD e deploy (GitHub Actions)
+
+Fluxo de branches: trabalho acontece em `staging`; quando está validado no
+ambiente de staging, o merge de `staging` para `master` dispara produção.
+Não existe deploy automático a partir de nenhum outro branch.
+
+```text
+push em staging  →  CI (pytest + vitest)  →  deploy em staging
+        │
+        │ (validado manualmente em staging.seudominio.com)
+        ▼
+merge staging → master  →  CI  →  deploy blue-green em produção
+```
+
+Workflows (`.github/workflows/`):
+
+- **`ci.yml`** — roda em todo push/PR contra `staging` ou `master`. Sobe a
+  mesma stack de dev (`docker-compose.yml`) e roda `pytest` dentro do
+  container do backend (igual ao fluxo manual documentado em "Testes"), mais
+  lint/build/testes do frontend. Também exposto como `workflow_call`, reusado
+  pelos dois workflows de deploy como gate.
+- **`deploy-staging.yml`** — em push para `staging`: roda `ci.yml` e, se
+  passar, conecta via SSH e executa `deploy/staging-deploy.sh` no servidor.
+  Staging é uma stack única e completa (`docker-compose.staging.yml`), com
+  Postgres/MinIO/bucket/domínio próprios — nunca compartilha dado com
+  produção, mesmo rodando na mesma VM.
+- **`deploy-production.yml`** — em push para `master` (ou seja, no merge):
+  roda `ci.yml` e, se passar, executa `deploy/prod-deploy.sh` via SSH.
+- **`rollback-production.yml`** — só `workflow_dispatch` (botão manual em
+  Actions). Roda `deploy/prod-rollback.sh`. Sem gatilho automático de
+  propósito: rollback é sempre uma decisão humana.
+
+### Produção: blue-green de verdade
+
+Postgres e MinIO são **únicos e nunca duplicados** (`docker-compose.prod.shared.yml`).
+Só a camada sem estado — backend, worker, frontend — existe em dois slots
+(`docker-compose.prod.app.yml`, subido duas vezes como projects `sentinel-blue`
+e `sentinel-green`, conectados à mesma rede externa `sentinel_net`).
+
+`deploy/prod-deploy.sh`:
+
+1. builda e sobe o slot **inativo** com o código novo (o entrypoint do
+   backend já roda `alembic upgrade head` antes do healthcheck passar);
+2. só segue se o slot novo ficar saudável — se falhar, o script para aqui e
+   o slot antigo continua servindo tráfego sem interrupção;
+3. reescreve `deploy/active-slot.env` (nunca commitado) e recria só o
+   container do Caddy (`docker-compose.prod.shared.yml`), que lê o upstream
+   ativo de `{$BACKEND_UPSTREAM}`/`{$FRONTEND_UPSTREAM}` no
+   `caddy/Caddyfile.prod` — troca de tráfego em menos de 1s, sem rebuild;
+4. para (sem remover) o slot antigo, pronto pra rollback instantâneo com
+   `deploy/prod-rollback.sh` (religa sem rebuild e reaponta o Caddy de volta).
+
+Como Postgres é único e compartilhado entre os dois slots, migrations
+precisam continuar backward-compatible durante a janela de troca — a mesma
+regra de qualquer blue-green com banco compartilhado, não algo que este
+projeto resolve automaticamente.
+
+### Setup único no servidor (manual, uma vez)
+
+O VM de produção (177.72.80.11) já roda um Nginx Proxy Manager que termina
+TLS em 80/443 e encaminha por domínio para portas internas — o Caddy deste
+projeto nunca fala HTTPS diretamente. Antes do primeiro deploy automático:
+
+```bash
+docker network create sentinel_net
+
+git clone <repo> /root/sentinel-tiiv            # branch master (produção)
+git clone <repo> /root/sentinel-tiiv-staging    # branch staging
+
+cd /root/sentinel-tiiv-staging && git checkout staging
+cp .env.staging.example .env.staging   # preencher os valores
+
+cd /root/sentinel-tiiv
+cp .env.production.example .env.production   # preencher os valores
+bash deploy/prod-deploy.sh   # primeiro deploy, roda o slot "blue"
+```
+
+Depois disso, cadastre em Settings → Secrets and variables → Actions do
+repositório no GitHub:
+
+```text
+DEPLOY_SSH_HOST
+DEPLOY_SSH_USER
+DEPLOY_SSH_KEY    # chave privada; a pública precisa estar em
+                  # authorized_keys do usuário de deploy no servidor
+DEPLOY_SSH_PORT   # opcional, default 22
+```
+
+E aponte no NPM os domínios de staging/produção para `localhost:8400` e
+`localhost:8300` respectivamente (mesmo modelo que já existe para produção).
+
 ## Débito técnico deixado intencionalmente
 
 Lista consolidada e mantida atualizada — itens de etapas anteriores que
@@ -1102,6 +1193,15 @@ presente no estado final do projeto:
   já deixa isso pronto para quando houver um coletor real.
 - Console web do MinIO (porta 9001) exposto ao host — conveniência de dev,
   não deve ser exposto da mesma forma num deploy real (ver Prompt 25).
+- Rate limiter em memória (ver item acima) some a cada deploy de produção:
+  o slot novo do blue-green começa com contadores zerados, então tentativas
+  de brute-force feitas pouco antes de um deploy não carregam pro slot
+  seguinte. Efeito colateral aceitável do MVP, não uma vulnerabilidade nova.
+- Staging roda na mesma VM de produção (`docker-compose.staging.yml`
+  compartilha CPU/RAM/disco com os dois slots de produção, embora dado e
+  rede sejam isolados) — um teste pesado em staging pode competir por
+  recurso com produção. Aceitável na escala atual; separar staging pra um
+  servidor próprio é o próximo passo natural se isso virar problema.
 
 ## Revisão final de arquitetura (Prompt 27)
 

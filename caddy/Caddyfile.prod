@@ -6,16 +6,21 @@
 # em 177.72.80.11). Este Caddy só roteia por Host header em HTTP puro,
 # recebendo o tráfego que o NPM encaminha para a porta publicada abaixo.
 http://{$DOMAIN} {
+	# BACKEND_UPSTREAM / FRONTEND_UPSTREAM apontam pro slot ativo (ex.:
+	# "backend-blue:8000") e vêm de deploy/active-slot.env (env_file do
+	# serviço caddy em docker-compose.prod.shared.yml). Trocar de slot é
+	# reescrever esse arquivo e recriar só este container — ver
+	# deploy/prod-deploy.sh.
 	handle /api/* {
-		reverse_proxy backend:8000
+		reverse_proxy {$BACKEND_UPSTREAM}
 	}
 
 	handle /health {
-		reverse_proxy backend:8000
+		reverse_proxy {$BACKEND_UPSTREAM}
 	}
 
 	handle {
-		reverse_proxy frontend:80
+		reverse_proxy {$FRONTEND_UPSTREAM}
 	}
 
 	encode gzip

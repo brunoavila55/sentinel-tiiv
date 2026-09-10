@@ -1,0 +1,63 @@
+name: CI
+
+# Também exposto como workflow_call: deploy-staging.yml e
+# deploy-production.yml reusam este mesmo workflow como gate antes de
+# fazer deploy, em vez de duplicar os passos de teste.
+on:
+  push:
+    branches: [staging, master]
+  pull_request:
+    branches: [staging, master]
+  workflow_call: {}
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Replica exatamente o fluxo documentado no README ("Como rodar os
+      # testes"): sobe a stack de dev de verdade (docker-compose.yml) e
+      # roda pytest dentro do container do backend — nada de serviços
+      # paralelos inventados só para o CI.
+      - name: Subir Postgres e MinIO
+        run: docker compose up -d --build postgres minio
+
+      - name: Criar bucket do MinIO
+        run: docker compose up --build minio-init
+
+      - name: Subir backend
+        run: docker compose up -d --build --wait backend
+
+      - name: Instalar dependências de teste
+        run: docker compose exec -T backend pip install -r requirements-dev.txt
+
+      - name: Rodar pytest
+        run: docker compose exec -T backend pytest -q
+
+      - name: Logs dos serviços (em caso de falha)
+        if: failure()
+        run: docker compose logs
+
+      - name: Encerrar stack
+        if: always()
+        run: docker compose down -v
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test

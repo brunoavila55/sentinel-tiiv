@@ -1,0 +1,81 @@
+# Camada stateless de produção (backend, worker, frontend) — sem estado
+# próprio, por isso é a que existe em dois slots (blue/green). Sobe-se este
+# arquivo duas vezes, uma por slot, cada vez como um project name diferente:
+#
+#   SLOT=blue  docker compose -f docker-compose.prod.app.yml -p sentinel-blue  --env-file .env.production up -d --build
+#   SLOT=green docker compose -f docker-compose.prod.app.yml -p sentinel-green --env-file .env.production up -d --build
+#
+# Os dois projetos se conectam à mesma rede externa "sentinel_net" onde
+# vivem o Postgres/MinIO/Caddy únicos (docker-compose.prod.shared.yml).
+# Postgres e MinIO NUNCA são duplicados — só esta camada é. Ver
+# deploy/prod-deploy.sh para o fluxo completo de troca de slot.
+services:
+  backend:
+    build: ./backend
+    container_name: backend-${SLOT:?defina SLOT=blue ou SLOT=green ao rodar este compose}
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_DOMAIN:?defina MINIO_DOMAIN em .env.production}
+      MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_USE_SSL: "true"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-sentinel-assets}
+      CORS_ORIGINS: https://${DOMAIN}
+      PUBLIC_APP_URL: https://${DOMAIN}
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY em .env.production, gerado com python3 -c 'import secrets; print(secrets.token_urlsafe(32))'}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - sentinel_net
+    # Sem "ports": só o Caddy (na rede sentinel_net) fala com o slot ativo,
+    # pelo container_name (backend-blue / backend-green).
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: worker-${SLOT}
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY em .env.production, gerado com python3 -c 'import secrets; print(secrets.token_urlsafe(32))'}
+    depends_on:
+      # Mesmo projeto compose que "backend" (diferente do Postgres, que
+      # está no compose "shared") — dá pra usar depends_on normalmente
+      # pra esperar o entrypoint do backend terminar `alembic upgrade
+      # head` antes do worker começar a consultar as tabelas.
+      backend:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
+    networks:
+      - sentinel_net
+    # Cuidado: os dois slots rodam worker ao mesmo tempo enquanto o antigo
+    # não é parado por deploy/prod-deploy.sh — os checks vencidos são
+    # reservados com "FOR UPDATE SKIP LOCKED" (Prompt 09), então dois
+    # workers batendo no mesmo Postgres nunca duplicam um check.
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: frontend-${SLOT}
+    restart: unless-stopped
+    networks:
+      - sentinel_net
+    # Sem bind mount, sem "ports": build estático (nginx na porta 80
+    # interna), só o Caddy fala com ele.
+
+networks:
+  sentinel_net:
+    external: true

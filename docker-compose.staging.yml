@@ -1,0 +1,131 @@
+# Stack de staging: ambiente de validação antes do merge para `master`.
+# Roda como stack única de verdade (sem blue/green — troca de tráfego
+# instantânea não é necessária aqui) e completamente isolada de produção:
+# volumes, bucket e domínio próprios, mesmo estando na mesma VM.
+#
+# Uso:
+#   docker compose -f docker-compose.staging.yml -p sentinel-staging \
+#     --env-file .env.staging up -d --build
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER em .env.staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em .env.staging}
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB em .env.staging}
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?defina MINIO_ROOT_USER em .env.staging}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina MINIO_ROOT_PASSWORD em .env.staging}
+    volumes:
+      - minio_data_staging:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-sentinel-assets-staging}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/$$MINIO_BUCKET &&
+      mc anonymous set none local/$$MINIO_BUCKET
+      "
+    restart: "no"
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_DOMAIN:?defina MINIO_DOMAIN em .env.staging}
+      MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_USE_SSL: "true"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-sentinel-assets-staging}
+      CORS_ORIGINS: https://${DOMAIN}
+      PUBLIC_APP_URL: https://${DOMAIN}
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY em .env.staging, gerado com python3 -c 'import secrets; print(secrets.token_urlsafe(32))'}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY em .env.staging, gerado com python3 -c 'import secrets; print(secrets.token_urlsafe(32))'}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    volumes:
+      - ./caddy/Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - caddy_data_staging:/data
+      - caddy_config_staging:/config
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN em .env.staging}
+      MINIO_DOMAIN: ${MINIO_DOMAIN}
+    ports:
+      # Porta interna diferente da de produção (8300) — o mesmo Nginx
+      # Proxy Manager encaminha pra cá com base no domínio de staging.
+      - "8400:80"
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data_staging:
+  minio_data_staging:
+  caddy_data_staging:
+  caddy_config_staging:

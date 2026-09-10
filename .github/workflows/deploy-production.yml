@@ -1,0 +1,33 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    # Ambiente "production" do GitHub: se configurado com required
+    # reviewers em Settings → Environments, o deploy pausa esperando
+    # aprovação manual antes de rodar o SSH abaixo. Opcional, mas
+    # recomendado pra produção.
+    environment: production
+    steps:
+      - name: Deploy via SSH (blue-green)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          # /root/sentinel-tiiv: checkout dedicado ao branch master no
+          # servidor (ver README, seção CI/CD). Se o caminho for outro na
+          # sua VM, ajuste aqui.
+          script: |
+            set -e
+            cd /root/sentinel-tiiv
+            bash deploy/prod-deploy.sh

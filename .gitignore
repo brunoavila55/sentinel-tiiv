@@ -1,6 +1,8 @@
 # Ambiente
 .env
 .env.production
+.env.staging
+deploy/active-slot.env
 
 # Python
 __pycache__/
