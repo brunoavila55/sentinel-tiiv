@@ -71,7 +71,11 @@ services:
       dockerfile: Dockerfile.prod
     container_name: frontend-${SLOT}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      # "localhost" pode resolver primeiro para ::1 (IPv6) no Alpine, e o
+      # BusyBox wget não cai para IPv4 nesse caso — o nginx só escuta em
+      # IPv4 (nginx.conf não tem "listen [::]:80"). Usar 127.0.0.1 direto
+      # evita a ambiguidade de resolução.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
       interval: 5s
       timeout: 5s
       retries: 10
