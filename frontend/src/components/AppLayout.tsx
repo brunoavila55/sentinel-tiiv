@@ -19,14 +19,15 @@ import { Select } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-context";
 import type { OrganizationOut } from "@/lib/types";
 
 const DEFAULT_FAVICON = "/favicon.svg";
 
-// <picture> escolhe a variante via media query nativa do navegador
-// (prefers-color-scheme) — não depende de a aplicação ter um mecanismo de
-// tema próprio ativo. Se só uma variante existir, ela serve de fallback
-// para os dois modos.
+// A escolha da variante segue o tema do próprio app (useTheme), não o
+// prefers-color-scheme do sistema operacional — o app mantém tema próprio,
+// independente do SO (ver theme-context.tsx). Se só uma variante existir,
+// ela serve de fallback para os dois modos.
 function OrganizationLogo({
   logoLightUrl,
   logoDarkUrl,
@@ -34,15 +35,11 @@ function OrganizationLogo({
   logoLightUrl: string | null | undefined;
   logoDarkUrl: string | null | undefined;
 }) {
-  const fallback = logoLightUrl || logoDarkUrl;
-  if (!fallback) return null;
+  const { theme } = useTheme();
+  const src = (theme === "dark" ? logoDarkUrl : logoLightUrl) || logoLightUrl || logoDarkUrl;
+  if (!src) return null;
 
-  return (
-    <picture>
-      {logoDarkUrl && <source srcSet={logoDarkUrl} media="(prefers-color-scheme: dark)" />}
-      <img src={fallback} alt="" className="h-6 w-6 shrink-0 rounded-sm object-contain" />
-    </picture>
-  );
+  return <img src={src} alt="" className="h-6 w-6 shrink-0 rounded-sm object-contain" />;
 }
 
 function useOrganizationFavicon(faviconUrl: string | null | undefined) {
