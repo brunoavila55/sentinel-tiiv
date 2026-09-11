@@ -145,6 +145,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
           data: {
             name: n.name,
             status: n.status,
+            angle: 0,
             highlighted: n.id === highlightedId,
             hasChildren: children.length > 0,
             childCount: children.length,

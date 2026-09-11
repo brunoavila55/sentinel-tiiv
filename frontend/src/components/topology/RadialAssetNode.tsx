@@ -8,6 +8,8 @@ import type { AssetStatus } from "@/lib/types";
 export interface RadialAssetNodeData {
   name: string;
   status: AssetStatus;
+  /** Ângulo (radianos) do raio pai→nó no layout radial; usado para orientar o rótulo. */
+  angle: number;
   highlighted: boolean;
   hasChildren: boolean;
   childCount: number;
@@ -29,11 +31,18 @@ const zoomSelector = (state: { transform: [number, number, number] }) => state.t
  * visual com centenas de nós simultâneos.
  */
 export function RadialAssetNode({ id, data, selected }: NodeProps) {
-  const { name, status, highlighted, hasChildren, childCount, collapsed, onToggleCollapse, onFocus } =
+  const { name, status, angle, highlighted, hasChildren, childCount, collapsed, onToggleCollapse, onFocus } =
     data as RadialAssetNodeData;
   const zoom = useStore(zoomSelector);
   const labelVisible = zoom > 0.35;
   const labelScale = 1 / Math.max(zoom, 0.001);
+
+  // Rótulo alinhado ao raio pai→nó, para o texto "sair" do nó na mesma direção do galho.
+  // Na metade esquerda do círculo o raio aponta para a esquerda, então o rótulo é girado
+  // mais 180° e ancorado pela ponta oposta — senão o texto ficaria de cabeça para baixo.
+  const angleDeg = (angle * 180) / Math.PI;
+  const flip = Math.cos(angle) < 0;
+  const labelOffset = RADIAL_NODE_SIZE / 2 + 6;
 
   return (
     <div className="group relative flex flex-col items-center" style={{ width: RADIAL_NODE_SIZE }}>
@@ -84,15 +93,25 @@ export function RadialAssetNode({ id, data, selected }: NodeProps) {
       </div>
 
       {labelVisible && (
-        <span
-          className={`pointer-events-none absolute top-full mt-1 whitespace-nowrap rounded px-1 text-[10px] leading-tight ${
-            highlighted ? "bg-primary text-primary-foreground" : "bg-background/90 text-foreground"
-          }`}
-          style={{ transform: `scale(${labelScale})`, transformOrigin: "top center" }}
-          title={name}
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2"
+          style={{ transform: `rotate(${angleDeg}deg)`, transformOrigin: "0 0" }}
         >
-          {name}
-        </span>
+          <div style={{ transform: `translateX(${labelOffset}px) rotate(${flip ? 180 : 0}deg)`, transformOrigin: "0 0" }}>
+            <span
+              className={`absolute top-0 whitespace-nowrap rounded px-1 text-[10px] leading-tight ${
+                flip ? "right-0" : "left-0"
+              } ${highlighted ? "bg-primary text-primary-foreground" : "bg-background/90 text-foreground"}`}
+              style={{
+                transform: `translateY(-50%) scale(${labelScale})`,
+                transformOrigin: flip ? "right center" : "left center",
+              }}
+              title={name}
+            >
+              {name}
+            </span>
+          </div>
+        </div>
       )}
 
       <Handle type="source" position={Position.Bottom} style={centeredHandle} />

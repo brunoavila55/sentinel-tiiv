@@ -57,12 +57,12 @@ export function layoutRadial<T extends Node>(nodes: T[], tree: TreeIndex): T[] {
   // densidade de folhas só pode *aumentar* o espaçamento entre pai e filho, nunca reduzi-lo.
   const ringSpacing = maxDepth > 0 ? Math.max(MIN_RING_SPACING, outerRadius / maxDepth) : MIN_RING_SPACING;
 
-  const positions = new Map<string, { x: number; y: number }>();
+  const positions = new Map<string, { x: number; y: number; angle: number }>();
 
   function place(id: string, angleStart: number, angleEnd: number, depth: number) {
     const angle = (angleStart + angleEnd) / 2;
     const radius = depth === 0 ? 0 : depth * ringSpacing;
-    positions.set(id, { x: radius * Math.cos(angle), y: radius * Math.sin(angle) });
+    positions.set(id, { x: radius * Math.cos(angle), y: radius * Math.sin(angle), angle });
 
     const kids = children.get(id) ?? [];
     if (kids.length === 0) return;
@@ -90,7 +90,11 @@ export function layoutRadial<T extends Node>(nodes: T[], tree: TreeIndex): T[] {
   }
 
   return nodes.map((node) => {
-    const pos = positions.get(node.id) ?? { x: 0, y: 0 };
-    return { ...node, position: { x: pos.x - RADIAL_NODE_SIZE / 2, y: pos.y - RADIAL_NODE_SIZE / 2 } };
+    const pos = positions.get(node.id) ?? { x: 0, y: 0, angle: 0 };
+    return {
+      ...node,
+      position: { x: pos.x - RADIAL_NODE_SIZE / 2, y: pos.y - RADIAL_NODE_SIZE / 2 },
+      data: { ...node.data, angle: pos.angle },
+    };
   });
 }
