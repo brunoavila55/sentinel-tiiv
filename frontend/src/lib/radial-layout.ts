@@ -5,9 +5,10 @@ import type { TreeIndex } from "@/lib/topology-tree";
 /** Diâmetro do nó (bolinha) usado para converter centro <-> posição (canto superior esquerdo) do React Flow. */
 export const RADIAL_NODE_SIZE = 14;
 
-const RING_SPACING = 110;
+/** Distância mínima (px) entre dois anéis — ou seja, comprimento mínimo da linha entre pai e filho. */
+const MIN_RING_SPACING = 170;
 /** Distância mínima (px) entre duas folhas adjacentes no anel mais externo, para as bolinhas não colarem. */
-const MIN_LEAF_GAP = 30;
+const MIN_LEAF_GAP = 46;
 
 /**
  * Posiciona os nós em anéis concêntricos a partir da(s) raiz(es) visível(is), como uma árvore
@@ -51,8 +52,10 @@ export function layoutRadial<T extends Node>(nodes: T[], tree: TreeIndex): T[] {
   for (const r of roots) walkDepth(r, rootDepth);
 
   const anglePerLeaf = (2 * Math.PI) / Math.max(totalLeaves, 1);
-  const outerRadius = Math.max(RING_SPACING, MIN_LEAF_GAP / anglePerLeaf);
-  const ringSpacing = maxDepth > 0 ? outerRadius / maxDepth : RING_SPACING;
+  const outerRadius = MIN_LEAF_GAP / anglePerLeaf;
+  // Nunca deixa o anel mais espremido que MIN_RING_SPACING só porque a árvore é funda — a
+  // densidade de folhas só pode *aumentar* o espaçamento entre pai e filho, nunca reduzi-lo.
+  const ringSpacing = maxDepth > 0 ? Math.max(MIN_RING_SPACING, outerRadius / maxDepth) : MIN_RING_SPACING;
 
   const positions = new Map<string, { x: number; y: number }>();
 
