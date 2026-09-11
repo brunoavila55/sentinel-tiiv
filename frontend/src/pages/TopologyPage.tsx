@@ -16,18 +16,18 @@ import "@xyflow/react/dist/style.css";
 
 import { EmptyState } from "@/components/EmptyState";
 import { AssetInspector } from "@/components/topology/AssetInspector";
-import { AssetNode, type AssetNodeData } from "@/components/topology/AssetNode";
+import { RadialAssetNode, type RadialAssetNodeData } from "@/components/topology/RadialAssetNode";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { layoutWithDagre, NODE_HEIGHT, NODE_WIDTH, type LayoutDirection } from "@/lib/dagre-layout";
+import { layoutRadial, RADIAL_NODE_SIZE } from "@/lib/radial-layout";
 import { ancestorChain, buildTreeIndex, collapseAtDepth, visibleDescendants } from "@/lib/topology-tree";
 import type { SiteOut, TopologyResponse } from "@/lib/types";
 
-const nodeTypes = { asset: AssetNode };
+const nodeTypes = { asset: RadialAssetNode };
 
 export function TopologyPage() {
   const [siteId, setSiteId] = useState<string>("");
@@ -93,7 +93,6 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
     currentMembership?.role === "owner" || currentMembership?.role === "admin" || currentMembership?.role === "operator";
   const queryClient = useQueryClient();
 
-  const [direction, setDirection] = useState<LayoutDirection>("TB");
   const [hierarchy, setHierarchy] = useState<"flat" | "full">("full");
   const [search, setSearch] = useState("");
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -115,7 +114,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
     [topologyQuery.data],
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<AssetNodeData>>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<RadialAssetNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Reseta o recolhimento e o foco sempre que os dados mudam (novo site,
@@ -135,7 +134,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
     const startIds = focusId ? [focusId] : treeIndex.roots;
     const visible = visibleDescendants(startIds, treeIndex, collapsedIds);
 
-    const rawNodes: Node<AssetNodeData>[] = topologyQuery.data.nodes
+    const rawNodes: Node<RadialAssetNodeData>[] = topologyQuery.data.nodes
       .filter((n) => visible.has(n.id))
       .map((n) => {
         const children = treeIndex.childrenOf.get(n.id) ?? [];
@@ -146,8 +145,6 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
           data: {
             name: n.name,
             status: n.status,
-            rtt: n.last_rtt_ms,
-            direction,
             highlighted: n.id === highlightedId,
             hasChildren: children.length > 0,
             childCount: children.length,
@@ -169,17 +166,18 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
         id: e.id,
         source: e.source_asset_id,
         target: e.target_asset_id,
-        style: { stroke: "var(--border)", strokeWidth: 1.5 },
+        type: "straight",
+        style: { stroke: "var(--border)", strokeWidth: 1 },
       }));
 
-    const laidOut = layoutWithDagre(rawNodes, rawEdges, direction);
+    const laidOut = layoutRadial(rawNodes, treeIndex);
     setNodes(laidOut);
     setEdges(rawEdges);
 
     const timer = setTimeout(() => {
       const target = pendingCenterId ? laidOut.find((n) => n.id === pendingCenterId) : undefined;
       if (target) {
-        setCenter(target.position.x + NODE_WIDTH / 2, target.position.y + NODE_HEIGHT / 2, {
+        setCenter(target.position.x + RADIAL_NODE_SIZE / 2, target.position.y + RADIAL_NODE_SIZE / 2, {
           zoom: Math.max(getZoom(), 1),
           duration: 300,
         });
@@ -190,7 +188,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
     }, 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topologyQuery.data, direction, collapsedIds, focusId, highlightedId, treeIndex]);
+  }, [topologyQuery.data, collapsedIds, focusId, highlightedId, treeIndex]);
 
   function handleSearch(term: string) {
     setSearch(term);
@@ -218,7 +216,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
   const breadcrumb = focusId ? ancestorChain(focusId, treeIndex) : null;
 
   function reorganize() {
-    setNodes((nds) => layoutWithDagre(nds, edges, direction));
+    setNodes((nds) => layoutRadial(nds, treeIndex));
     setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 0);
   }
 
@@ -284,10 +282,6 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
               Completa
             </button>
           </div>
-
-          <Button variant="outline" size="sm" onClick={() => setDirection((d) => (d === "TB" ? "LR" : "TB"))}>
-            {direction === "TB" ? "Vertical" : "Horizontal"}
-          </Button>
 
           {editMode && (
             <Button variant="outline" size="sm" onClick={reorganize}>
