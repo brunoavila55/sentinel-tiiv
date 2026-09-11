@@ -9,6 +9,13 @@ export const RADIAL_NODE_SIZE = 14;
 const MIN_RING_SPACING = 170;
 /** Distância mínima (px) entre duas folhas adjacentes no anel mais externo, para as bolinhas não colarem. */
 const MIN_LEAF_GAP = 72;
+/** Bônus de raio (px) aplicado só às folhas, para a linha final até elas ficar mais longa que os anéis internos. */
+const LEAF_RADIUS_BONUS = 60;
+/**
+ * Fração da fatia angular de cada nó reservada como espaço vazio entre suas sub-árvores filhas,
+ * para sub-árvores de ramos diferentes não ficarem coladas uma na outra.
+ */
+const BRANCH_GAP_RATIO = 0.16;
 
 /**
  * Posiciona os nós em anéis concêntricos a partir da(s) raiz(es) visível(is), como uma árvore
@@ -52,41 +59,49 @@ export function layoutRadial<T extends Node>(nodes: T[], tree: TreeIndex): T[] {
   for (const r of roots) walkDepth(r, rootDepth);
 
   const anglePerLeaf = (2 * Math.PI) / Math.max(totalLeaves, 1);
-  const outerRadius = MIN_LEAF_GAP / anglePerLeaf;
+  // Reservar espaço para os gaps entre ramos consome parte do arco disponível para as folhas —
+  // compensa o raio para que a distância mínima entre folhas continue valendo mesmo com os gaps.
+  const outerRadius = MIN_LEAF_GAP / anglePerLeaf / (1 - BRANCH_GAP_RATIO);
   // Nunca deixa o anel mais espremido que MIN_RING_SPACING só porque a árvore é funda — a
   // densidade de folhas só pode *aumentar* o espaçamento entre pai e filho, nunca reduzi-lo.
   const ringSpacing = maxDepth > 0 ? Math.max(MIN_RING_SPACING, outerRadius / maxDepth) : MIN_RING_SPACING;
 
   const positions = new Map<string, { x: number; y: number; angle: number }>();
 
+  /** Divide [angleStart, angleEnd] entre `counts.length` itens proporcionalmente aos pesos,
+   * reservando BRANCH_GAP_RATIO do arco como espaços vazios entre itens adjacentes. */
+  function splitAngle(counts: number[], angleStart: number, angleEnd: number): Array<[number, number]> {
+    const total = counts.reduce((a, b) => a + b, 0);
+    const fullSpan = angleEnd - angleStart;
+    const gapCount = counts.length - 1;
+    const gapAngle = gapCount > 0 ? (fullSpan * BRANCH_GAP_RATIO) / gapCount : 0;
+    const usableSpan = fullSpan - gapAngle * gapCount;
+    const slices: Array<[number, number]> = [];
+    let cursor = angleStart;
+    for (const count of counts) {
+      const span = usableSpan * (count / total);
+      slices.push([cursor, cursor + span]);
+      cursor += span + gapAngle;
+    }
+    return slices;
+  }
+
   function place(id: string, angleStart: number, angleEnd: number, depth: number) {
     const angle = (angleStart + angleEnd) / 2;
-    const radius = depth === 0 ? 0 : depth * ringSpacing;
+    const kids = children.get(id) ?? [];
+    const radius = depth === 0 ? 0 : depth * ringSpacing + (kids.length === 0 ? LEAF_RADIUS_BONUS : 0);
     positions.set(id, { x: radius * Math.cos(angle), y: radius * Math.sin(angle), angle });
 
-    const kids = children.get(id) ?? [];
     if (kids.length === 0) return;
     const counts = kids.map((k) => leafCount(k));
-    const total = counts.reduce((a, b) => a + b, 0);
-    let cursor = angleStart;
-    kids.forEach((kid, i) => {
-      const span = (angleEnd - angleStart) * (counts[i] / total);
-      place(kid, cursor, cursor + span, depth + 1);
-      cursor += span;
-    });
+    splitAngle(counts, angleStart, angleEnd).forEach(([start, end], i) => place(kids[i], start, end, depth + 1));
   }
 
   if (roots.length === 1) {
     place(roots[0], 0, 2 * Math.PI, 0);
   } else {
     const counts = roots.map((r) => leafCount(r));
-    const total = counts.reduce((a, b) => a + b, 0);
-    let cursor = 0;
-    roots.forEach((r, i) => {
-      const span = 2 * Math.PI * (counts[i] / total);
-      place(r, cursor, cursor + span, 1);
-      cursor += span;
-    });
+    splitAngle(counts, 0, 2 * Math.PI).forEach(([start, end], i) => place(roots[i], start, end, 1));
   }
 
   return nodes.map((node) => {

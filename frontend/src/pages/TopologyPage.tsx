@@ -373,6 +373,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
             nodesConnectable={editMode}
             elementsSelectable
             fitView
+            minZoom={0.05}
             proOptions={{ hideAttribution: true }}
           >
             <Background gap={20} size={1} color="var(--border)" />
