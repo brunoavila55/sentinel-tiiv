@@ -17,7 +17,6 @@ import "@xyflow/react/dist/style.css";
 import { EmptyState } from "@/components/EmptyState";
 import { AssetInspector } from "@/components/topology/AssetInspector";
 import { RadialAssetNode, type RadialAssetNodeData } from "@/components/topology/RadialAssetNode";
-import { RadialEdge } from "@/components/topology/RadialEdge";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
@@ -29,7 +28,6 @@ import { ancestorChain, buildTreeIndex, collapseAtDepth, visibleDescendants } fr
 import type { SiteOut, TopologyResponse } from "@/lib/types";
 
 const nodeTypes = { asset: RadialAssetNode };
-const edgeTypes = { radial: RadialEdge };
 
 export function TopologyPage() {
   const [siteId, setSiteId] = useState<string>("");
@@ -168,7 +166,7 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
         id: e.id,
         source: e.source_asset_id,
         target: e.target_asset_id,
-        type: "radial",
+        type: "straight",
         style: { stroke: "var(--border)", strokeWidth: 1 },
       }));
 
@@ -367,7 +365,6 @@ function TopologyCanvas({ siteId }: { siteId: string }) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
             onNodeClick={(_, node) => setSelectedAssetId(node.id)}
             onConnect={editMode ? handleConnect : undefined}
             onEdgeClick={editMode ? handleEdgeClick : undefined}
