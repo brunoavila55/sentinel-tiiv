@@ -8,7 +8,7 @@ export const RADIAL_NODE_SIZE = 14;
 /** Distância mínima (px) entre dois anéis — ou seja, comprimento mínimo da linha entre pai e filho. */
 const MIN_RING_SPACING = 170;
 /** Distância mínima (px) entre duas folhas adjacentes no anel mais externo, para as bolinhas não colarem. */
-const MIN_LEAF_GAP = 46;
+const MIN_LEAF_GAP = 72;
 
 /**
  * Posiciona os nós em anéis concêntricos a partir da(s) raiz(es) visível(is), como uma árvore
