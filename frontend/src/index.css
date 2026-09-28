@@ -172,11 +172,3 @@
   color: var(--muted-foreground);
 }
 
-/* Rótulo dos hosts na topologia: texto puro com contorno na cor do fundo,
-   para continuar legível quando cruza um link (como o texto SVG do Checkmk). */
-.topology-host-label {
-  text-shadow:
-    0 0 2px var(--background),
-    0 0 2px var(--background),
-    0 0 3px var(--background);
-}
