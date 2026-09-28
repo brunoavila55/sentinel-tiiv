@@ -56,13 +56,13 @@ describe("TopologyPage", () => {
     renderWithProviders(<TopologyPage />);
 
     expect(await screen.findByText("Topologia")).toBeInTheDocument();
-    expect(await screen.findByPlaceholderText(/buscar ativo/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/buscar por nome ou ip/i)).toBeInTheDocument();
 
     // viewer não vê o botão de editar topologia.
     expect(screen.queryByRole("button", { name: /editar topologia/i })).not.toBeInTheDocument();
   });
 
-  it("modo Flat recolhe netos por padrão, e a busca os revela", async () => {
+  it("recolher filhos pelo menu de contexto esconde a ramificação, e a busca a revela", async () => {
     mockedApiFetch.mockImplementation(async (path: unknown) => {
       const p = String(path);
       if (p.startsWith("/sites")) return [site];
@@ -84,14 +84,15 @@ describe("TopologyPage", () => {
 
     renderWithProviders(<TopologyPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Flat" }));
+    fireEvent.contextMenu(await screen.findByTitle(/^sw-meio/));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Recolher filhos" }));
 
-    await waitFor(() => expect(screen.getByText("sw-meio")).toBeInTheDocument());
-    expect(screen.queryByText("ap-neto")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTitle(/^ap-neto/)).not.toBeInTheDocument());
+    expect(screen.getByTitle(/^sw-meio .*1 ocultos/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText(/buscar ativo/i), { target: { value: "ap-neto" } });
+    fireEvent.change(screen.getByPlaceholderText(/buscar por nome ou ip/i), { target: { value: "ap-neto" } });
 
-    await waitFor(() => expect(screen.getByText("ap-neto")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTitle(/^ap-neto/)).toBeInTheDocument());
   });
 
   it("mostra o estado vazio quando o site não tem ativos", async () => {
@@ -104,6 +105,6 @@ describe("TopologyPage", () => {
 
     renderWithProviders(<TopologyPage />);
 
-    expect(await screen.findByText(/nenhum ativo neste site ainda/i)).toBeInTheDocument();
+    expect(await screen.findByText(/nenhum ativo neste site/i)).toBeInTheDocument();
   });
 });
