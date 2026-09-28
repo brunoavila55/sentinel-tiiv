@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-04-08T15-41-24Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -34,7 +34,7 @@ services:
 
   # Cria o bucket privado do MinIO automaticamente. Roda uma vez e sai.
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/minio:RELEASE.2025-04-08T15-41-24Z
     depends_on:
       minio:
         condition: service_healthy
