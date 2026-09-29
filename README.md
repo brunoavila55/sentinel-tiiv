@@ -86,10 +86,14 @@ saudável. O worker aguarda a mesma condição.
   os defaults existem apenas na camada de orquestração, documentados em
   `.env.example`, e devem ser substituídos fora do ambiente local.
 - **MinIO com bucket privado criado automaticamente**: um container
-  `minio-init` (baseado em `minio/mc`) roda uma vez, cria o bucket definido
+  `minio-init` (mesma imagem do MinIO, usando o `mc`) roda uma vez, cria o bucket definido
   em `MINIO_BUCKET` e garante que a política seja `none` (sem acesso
   anônimo). O acesso a objetos será feito por URLs assinadas, implementado
   em etapa futura.
+- **Imagem do MinIO compilada do código-fonte** (`minio/Dockerfile`): a
+  MinIO deixou de publicar imagens públicas (Docker Hub e quay.io negam o
+  pull), então o servidor e o `mc` são compilados das tags oficiais do
+  GitHub, fixadas também pelo SHA do commit. O primeiro build leva ~2 min.
 - **Caddy como origem única em desenvolvimento**: `/api/*` e `/health` vão
   para o backend, o restante vai para o dev server do Vite. Isso permite que
   o frontend use `fetch('/api/...')` relativo, sem depender de CORS quando
