@@ -48,9 +48,13 @@ echo "Slot $NEW_SLOT saudável. Trocando Caddy para o slot $NEW_SLOT..."
 switch_caddy_to "$NEW_SLOT"
 
 echo "Parando (sem remover) o slot antigo ($OLD_SLOT) — mantido para rollback."
-# SLOT precisa estar setado mesmo só pra parar: o compose interpola
-# container_name a partir dele. No primeiro deploy do servidor não existe
-# "sentinel-$OLD_SLOT" ainda — o `|| true` cobre esse caso.
-SLOT="$OLD_SLOT" docker compose -f docker-compose.prod.app.yml -p "sentinel-$OLD_SLOT" stop || true
+# SLOT e --env-file precisam estar presentes mesmo só pra parar: o compose
+# interpola o arquivo inteiro (container_name, SECRET_KEY obrigatório...)
+# antes de qualquer comando — sem o env-file o stop falha sem parar nada.
+# Uma falha aqui não desfaz o deploy (o Caddy já aponta pro slot novo), mas
+# precisa aparecer: sem isso os dois workers ficam rodando em paralelo.
+if ! SLOT="$OLD_SLOT" docker compose -f docker-compose.prod.app.yml -p "sentinel-$OLD_SLOT" --env-file .env.production stop; then
+    echo "AVISO: não foi possível parar o slot antigo ($OLD_SLOT). Pare manualmente."
+fi
 
 echo "Deploy concluído. Slot ativo: $NEW_SLOT."
