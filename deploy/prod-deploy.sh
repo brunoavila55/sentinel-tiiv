@@ -18,6 +18,13 @@ source deploy/lib.sh
 git fetch origin master
 git reset --hard origin/master
 
+# O bash continua executando a versão do script que já tinha aberto, não a
+# que o reset acabou de trazer — sem isto, mudanças neste arquivo só valeriam
+# no deploy seguinte. Reexecuta uma vez, já com o código atualizado.
+if [ -z "${DEPLOY_REEXEC:-}" ]; then
+    DEPLOY_REEXEC=1 exec bash deploy/prod-deploy.sh "$@"
+fi
+
 OLD_SLOT="$(current_slot)"
 NEW_SLOT="$(other_slot "$OLD_SLOT")"
 echo "Slot ativo atual: $OLD_SLOT — deploy vai pro slot: $NEW_SLOT"

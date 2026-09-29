@@ -9,6 +9,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 git fetch origin staging
 git reset --hard origin/staging
 
+# Reexecuta com a versão recém-atualizada deste script — ver o mesmo trecho
+# em prod-deploy.sh.
+if [ -z "${DEPLOY_REEXEC:-}" ]; then
+    DEPLOY_REEXEC=1 exec bash deploy/staging-deploy.sh "$@"
+fi
+
 COMPOSE="docker compose -f docker-compose.staging.yml -p sentinel-staging --env-file .env.staging"
 
 # minio-init é one-shot (roda e sai com código 0) — misturado num "up --wait"
